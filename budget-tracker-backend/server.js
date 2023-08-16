@@ -105,6 +105,28 @@ app.put('/edit-expense', (req, res) => {
   });
 });
 
+app.delete('/delete-expense', (req, res) => {
+  // Extracting the required fields from the request body
+  const { user_id, expenseId } = req.body;
+
+  // SQL query to delete the expense
+  const query = 'DELETE FROM expenses WHERE id = ? AND user_id = ?';
+
+  // Executing the query
+  db.query(query, [expenseId, user_id], (err, result) => {
+    if (err) {
+      console.error('Error deleting expense:', err);
+      res.json({ success: false, error: err.message });
+    } else {
+      // Check if any rows were affected (i.e., the expense was actually deleted)
+      if(result.affectedRows > 0) {
+        res.json({ success: true, message: 'Expense deleted successfully.' });
+      } else {
+        res.json({ success: false, message: 'No matching expense found for the provided ID and user.' });
+      }
+    }
+  });
+});
 
 
 app.get('/get-expenses', (req, res) => {
