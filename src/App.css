@@ -1,0 +1,660 @@
+.App {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 100vh;
+  overflow: hidden;
+  padding: 0 00px; /* Add padding to the sides */
+
+  /* Add any other styles you want for larger screens */
+}
+
+.main-content {
+  width: 100%;
+  max-width: 100vw;
+  margin: 0 auto;
+  padding: 20px;
+
+  /* Add any other styles you want for the main content area */
+
+  @media (max-width: 768px) {
+    /* Adjust styles for smaller screens */
+    max-width: 100%;
+  }
+}
+
+.input-wrapper {
+  display: inline;
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-size: 16px;
+}
+
+.input-wrapper input[type="text"] {
+  width: auto; /* Adjust the width as needed */
+  max-width: 100%; /* Use all available space within the wrapper */
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  border: none;
+  font-size: 16px;
+  background-color: transparent;
+}
+
+
+
+.tab-list {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 20px;
+  overflow-x: auto; /* Enable horizontal scrolling for smaller screens */
+}
+
+.tab-item {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-weight: bold;
+  color: #333;
+  transition: color 0.3s;
+}
+
+.tab-item.selected {
+  color: #3498db;
+}
+
+.tab-item:hover {
+  color: #3498db;
+}
+
+.tab-panel {
+  padding: 20px;
+}
+
+.budget-info {
+  background-color: #3498db;
+  color: white;
+  text-align: center;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+.closed-info {
+  background-color: green;  /* Light green color */
+  color: white;
+  text-align: center;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+.ongoing-info {
+  background-color: #3498db;
+  color: white;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  height: calc(4 * 1.5em);  /* Assuming each line height is 1.5em, for 4 lines */
+  justify-content: space-between;
+}
+
+.ongoing-info .header-text {
+  font-size: medium;
+  margin-bottom: 0.5em;  /* adjust to your preference */
+}
+
+.ongoing-info .expense-value {
+  font-size: large;  /* adjust to your preference */
+  margin-bottom: 0.5em;  /* adjust to your preference */
+}
+
+.ongoing-info .step-description {
+  font-size: medium;  /* adjust to your preference */
+}
+
+.expense-item {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); /* Three equal columns */
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.expense-name {
+  display: inline-block;
+  width: 50%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.used-already {
+  text-align: right; /* Align right for last column */
+}
+
+/* Media query for two-column layout */
+@media (max-width: 768px) {
+  .expense-item {
+    grid-template-columns: 3fr 1fr; /* 75% and 25% columns */
+  }
+
+  .used-already {
+    text-align: right; /* Align right for last column */
+  }
+}
+
+/* Base styling for the column layout */
+.column {
+  display: inline-block;
+  width: 30%; 
+  vertical-align: top; 
+  box-sizing: border-box; 
+  text-align: left; /* Default alignment */
+}
+
+.column-center {
+  text-align: center;
+}
+
+.column-right {
+  text-align: right;
+}
+
+/* If you want some spacing between columns */
+.column + .column {
+  margin-left: 5%;
+}
+
+.expense-item {
+  font-size: 0; /* This will remove any whitespace between inline-block elements */
+}
+
+.expense-item span {
+  font-size: 16px; /* Resetting the font size for children of .expense-item */
+}
+
+
+.available-heading, .used-already-heading {
+  text-align: center;
+  font-weight: bold;
+}
+
+.available {
+  grid-column: 3; /* Place in the third column */
+}
+
+.used-already {
+  grid-column: 4; /* Place in the fourth column */
+  color: #888; /* Optional: You can adjust the color as needed */
+}
+
+.used-already.positive {
+  color: green;
+}
+
+.used-already.negative {
+  color: red;
+}
+
+
+.total-price {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.budget-amount {
+  font-size: 36px;
+  margin: 10px 0;
+}
+
+.step-description {
+  font-size: 18px;
+}
+
+.expenses-heading {
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.expense-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.expense-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.add-category {
+  color: #777;
+  cursor: pointer;
+  display: inline-block;
+}
+
+.add-value {
+  color: #777;
+  cursor: pointer;
+  display: inline-block;
+  float: right; /* Align to the right */
+  text-align: right;
+}
+
+.button {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  padding-top: 20px;
+  padding-bottom: 20px;
+
+}
+
+.button-submit {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  margin-top: 10px;
+
+
+}
+
+.custom-icon-class {
+  font-size: 24px;
+  color: #e74c3c;
+  margin: 5px;
+  /* Add any other desired styles */
+}
+
+
+.button-close {
+  background-color: #e74c3c; /* Change to the red color you like */  
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  margin-top: 10px;
+  margin-left: 10px;
+
+
+}
+
+
+
+.button:hover {
+  background-color: #2980b9;
+}
+/* Add this to your App.css */
+.main-content {
+  width: 100%;
+  max-width: 100vw;
+  margin: 0 auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: calc(100vh - 40px);
+
+  /* Add any other styles you want for the main content area */
+
+  @media (max-width: 768px) {
+    /* Adjust styles for smaller screens */
+    max-width: 100%;
+    padding: 20px 20px 100px 0; /* Added 100px bottom padding */
+  }
+}
+
+/* Base styles for the submit button */
+.submit-button {
+  padding: 10px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.3s, color 0.3s;
+  width: 100%;
+  margin-top: auto;
+  text-transform: uppercase;
+  background-color: white;
+  
+}
+
+/* Green variant */
+.submit-button.closed {
+  color: green;
+  border: 2px solid green;
+  display: none;
+
+}
+
+/* Green variant */
+.submit-button.admin {
+  color: darkgoldenrod;
+  border: 2px solid darkgoldenrod;
+  display: yes;
+}
+
+
+
+/* Green variant */
+.submit-button.open {
+  color: red;
+  border: 2px solid red;
+  margin-top: 50px;
+  
+
+}
+
+.submit-button.closed:hover {
+  color: green;
+  border: 2px solid green;
+  
+}
+
+/* Blue variant */
+.submit-button.not-closed {
+  color: #3498db; /* Blue */
+  border: 2px solid #3498db;
+  display: none;
+
+}
+
+.submit-button.not-closed:hover {
+  background-color: #3498db; /* Blue */
+  color: white;
+  border-color: #2980b9;
+}
+
+
+/* Blue variant */
+.submit-button.waiting {
+  color: #3498db; /* Blue */
+  border: 2px solid #3498db;
+ 
+
+}
+
+.submit-button.waiting:hover {
+  background-color: #3498db; /* Blue */
+  color: white;
+  border-color: #2980b9;
+}
+
+/* Blue variant */
+.submit-button.ongoing {
+  color: #3498db; /* Blue */
+  border: 2px solid #3498db;
+ 
+
+}
+
+.submit-button.ongoing:hover {
+  background-color: #3498db; /* Blue */
+  color: white;
+  border-color: #2980b9;
+}
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 5px;
+  width: 300px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+
+/* ... (previous styles) */
+.tab-list {
+  display: flex;
+  justify-content: space-between;
+  padding: 0;
+  overflow-x: auto;
+  width: 100%;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 0;
+  cursor: pointer;
+  font-weight: bold;
+  transition: color 0.3s, background-color 0.3s;
+}
+
+.tab-item.selected {
+  color: #3498db;
+}
+
+.tab-item:hover {
+  color: #3498db;
+  background-color: transparent;
+}
+
+.tab-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.green {
+  color: #2ecc71; /* Green text color */
+}
+
+.orange {
+  color: #e67e22; /* Orange text color */
+}
+
+
+.expected {
+  color: orange;
+  font-weight: normal;
+}
+
+.waiting {
+  color: yellow;
+  font-weight: normal;
+}
+
+.ongoing {
+  color: blue;
+  font-weight: normal;
+}
+
+.closed {
+  color: green;
+  font-weight: normal;
+}
+
+.default-status {
+  color: black; /* You can adjust this default color as needed */
+  font-weight: normal;
+}
+
+
+
+.line {
+  width: 100%;
+  height: 2px;
+  background-color: #fff;
+  position: absolute;
+  bottom: 0;
+  z-index: -1;
+}
+
+.tick {
+  width: 10px;
+  height: 10px;
+  background-color: #3498db;
+  border-radius: 50%;
+  margin-top: 5px;
+  transition: opacity 0.3s;
+}
+
+.active .tick {
+  opacity: 1;
+  background-color: #3498db; /* Add background color when selected */
+}
+.tab-inner.active {
+  background-color: lightblue;
+  border-radius: 5px;
+  padding: 5px;
+}
+.tab-inner.green {
+  color: green;
+  font-weight: normal; /* Remove bold font-weight */
+
+}
+
+.tab-inner.orange {
+  color: orange;
+  font-weight: normal; /* Remove bold font-weight */
+
+  
+}
+.tab-item.selected .tab-inner {
+  background-color: #3498db;
+  border-radius: 25px; /* Adjust the border-radius to make it more tube-like */
+  color: white;
+  padding: 5px;
+  display: inline-block;
+  width: 50px;
+  text-align: center;
+  position: relative;
+}
+
+.tab-item.selected .tab-inner:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 25px; /* Adjust the width of the tube-like shape */
+  height: 20px; /* Adjust the height of the tube-like shape */
+  background-color: #3498db;
+  border-radius: 0 0 12px 12px; /* Adjust the border-radius for the bottom part of the tube */
+  z-index: -1;
+}
+
+.modal {
+  background-color: #fff;
+  border-radius: 8px;
+  width: 90%; /* take up 90% of the screen width */
+  height: 20%; /* take up 80% of the screen height */
+  margin: 50% auto; /* center it vertically with 10% margin on top and bottom */
+  padding: 10px;
+  box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.2);
+  overflow-y: auto; /* if content exceeds modal height, make it scrollable */
+}
+
+.used-already.right {
+  margin-left: 10px;
+}
+
+.modal-header {
+  font-size: 20px; /* slightly reduced for mobile */
+  margin-bottom: 15px;
+  color: #333;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 10px;
+}
+
+.modal-textarea {
+  width: 94%;
+  padding: 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  resize: vertical;
+}
+
+
+
+.button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px; /* slightly reduced for mobile */
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.button:hover {
+  background-color: #f5f5f5;
+}
+
+.save-button {
+  background-color: #4CAF50;
+  color: #fff;
+}
+
+.save-button:hover {
+  background-color: #45a049;
+}
+
+.cancel-button {
+  background-color: #f44336;
+  color: #fff;
+}
+
+.cancel-button:hover {
+  background-color: #e53935;
+}
+
+.modal-select {
+  width: 100%;
+  padding: 8px; /* slightly reduced for mobile */
+  margin-bottom: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+
+.category-input {
+  flex: 2;
+  padding: 8px; /* slightly reduced for mobile */
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+.number-input {
+  flex: 2;
+  padding: 8px; /* slightly reduced for mobile */
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  width:  80px;
+  margin-left: 20px;
+
+}
