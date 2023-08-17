@@ -215,9 +215,14 @@ const displayExpensesForTesting = () => {
   const [expenses, setExpenses] = useState([]);
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(7); // August index
   const [showTransactionLogger, setShowTransactionLogger] = useState(false);
-  const handleMonthChange = (monthIndex) => {
-    setSelectedMonthIndex(monthIndex);
-  };
+const handleMonthChange = (index) => {
+  // Calculate the difference between the clicked tab's index and the currently selected month index
+  const indexDiff = index - selectedMonthIndex;
+  
+  // Update the selectedMonthIndex with the calculated difference
+  setSelectedMonthIndex(selectedMonthIndex + indexDiff);
+};
+
 
   function getYearMonth(index) {
     const month = index + 1; // Month index is 0-based, so add 1
@@ -387,11 +392,13 @@ const getExpensesOfType = (expenseType, status) => {
   const [newCategoryNameFixed, setNewCategoryNameFixed] = useState('');
   const [newCategoryValueFixed, setNewCategoryValueFixed] = useState('');
 
+  
+
   const [isAddingCategoryVariable, setIsAddingCategoryVariable] = useState(false);
   const [newCategoryNameVariable, setNewCategoryNameVariable] = useState('');
   const [newCategoryValueVariable, setNewCategoryValueVariable] = useState('');
   
-  const handleAddCategory = (type) => {
+  const handleAddCategory = (type, name, value) => {
     if (type === 'Fixed') {
       if (isAddingCategoryFixed) {
         // Extract the current month from selectedMonthYear
@@ -406,8 +413,8 @@ const getExpensesOfType = (expenseType, status) => {
           const payload = {
             user_id: 1, // Get user ID from appropriate source
             category: 1,
-            expenseName: newCategoryNameFixed,
-            expenseAmount: newCategoryValueFixed,
+            expenseName: name,
+            expenseAmount: value,
             expenseType: type,
             expenseMonth
           };
@@ -428,7 +435,7 @@ const getExpensesOfType = (expenseType, status) => {
         setNewCategoryNameFixed('');
         setNewCategoryValueFixed('');
         setIsAddingCategoryFixed(false);
-        window.location.reload();
+         window.location.reload();
 
       } else {
         // If not in adding state, switch to the adding state
@@ -443,8 +450,8 @@ const getExpensesOfType = (expenseType, status) => {
           const payload = {
               user_id: 1, // Get user ID from appropriate source
               category: 1,
-              expenseName: newCategoryNameVariable,
-              expenseAmount: newCategoryValueVariable,
+              expenseName: name,
+              expenseAmount: value,
               expenseType: type,
               expenseMonth
           };
@@ -464,7 +471,7 @@ const getExpensesOfType = (expenseType, status) => {
           setNewCategoryNameVariable('');
           setNewCategoryValueVariable('');
           setIsAddingCategoryVariable(false);
-          window.location.reload();
+           window.location.reload();
 
         } else {
           setIsAddingCategoryVariable(true);
@@ -647,15 +654,20 @@ const handleValueChange = useCallback((e) => {
   setNewCategoryValueFixed(e.target.value);
 }, []);
 
-function ExpenseInput({
-  isAddingCategory,
-  categoryName,
-  categoryValue,
-  setCategoryName,
-  setCategoryValue,
-  handleAdd,
-  handleCancel
-}) {
+function ExpenseInput({ isAddingCategory, handleAdd, handleCancel }) {
+  const [categoryName, setCategoryName] = useState('');
+  const [categoryValue, setCategoryValue] = useState('');
+
+  const handleSubmit = () => {
+    if (categoryName && categoryValue) {
+      handleAdd(categoryName, categoryValue);
+      
+      // Reset the fields after submitting
+      setCategoryName('');
+      setCategoryValue('');
+    }
+  };
+
   if (isAddingCategory) {
     return (
       <>
@@ -675,7 +687,7 @@ function ExpenseInput({
           onChange={(e) => setCategoryValue(e.target.value)}
         />
 
-        <div className="add-category button-submit" onClick={handleAdd}>Submit</div>
+        <div className="add-category button-submit" onClick={handleSubmit}>Submit</div>
         {handleCancel && 
           <div className="add-category button-close" onClick={handleCancel}>Cancel</div>}
       </>
@@ -707,15 +719,16 @@ function ExpenseInput({
                       {getExpensesOfType('Fixed', currentMonthStatus)}
                       </ul>
                       <div className="button-group">
-                        <ExpenseInput 
+                      <ExpenseInput 
                           isAddingCategory={isAddingCategoryFixed}
                           categoryName={newCategoryNameFixed}
                           categoryValue={newCategoryValueFixed}
                           setCategoryName={setNewCategoryNameFixed}
                           setCategoryValue={setNewCategoryValueFixed}
-                          handleAdd={() => handleAddCategory('Fixed')}
+                          handleAdd={(categoryName, categoryValue) => handleAddCategory('Fixed', categoryName, categoryValue)}
                           handleCancel={() => setIsAddingCategoryFixed(false)}
-                        />
+                      />
+
                       </div>
                       <p></p>
                       <div className="expenses-heading">Variable Expenses</div>
@@ -723,14 +736,15 @@ function ExpenseInput({
                       {getExpensesOfType('Variable', currentMonthStatus)}
                       </ul>
                       <div className="button-group">
-                        <ExpenseInput 
+                      <ExpenseInput 
                           isAddingCategory={isAddingCategoryVariable}
                           categoryName={newCategoryNameVariable}
                           categoryValue={newCategoryValueVariable}
                           setCategoryName={setNewCategoryNameVariable}
                           setCategoryValue={setNewCategoryValueVariable}
-                          handleAdd={() => handleAddCategory('Variable')}
-                        />
+                          handleAdd={(categoryName, categoryValue) => handleAddCategory('Variable', categoryName, categoryValue)}
+                      />
+
                       </div>
                   </div>
               );
