@@ -5,13 +5,13 @@ const mysql = require('mysql');
 
 const app = express();
 app.use(cors());
-app.use(bodyParser.json());
+app.use(cors({ origin: 'http://capital-react-web-app-your-namespace.apps.your-openshift-cluster-domain.com' }));
 
 const db = mysql.createConnection({
-  host: 'mysql',
-  user: 'userSQU', // Replace with your MySQL username
-  password: '8n0HEUsN8QRpjisv', // Replace with your MySQL password
-  database: 'sampledb', // Replace with your desired database name
+  host: process.env.DB_HOST || 'mysql',
+  user: process.env.DB_USER || 'userSQU',
+  password: process.env.DB_PASSWORD || '8n0HEUsN8QRpjisv',
+  database: process.env.DB_NAME || 'sampledb',
 });
 
 
