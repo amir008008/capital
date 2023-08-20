@@ -23,6 +23,11 @@ db.connect((err) => {
   }
 });
 
+app.get('/', (req, res) => {
+  res.send('Hello, world!');
+});
+
+
 app.post('/add-expense', (req, res) => {
   const { user_id, category, expenseName, expenseAmount, expenseType, expenseMonth } = req.body;
 
