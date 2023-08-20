@@ -9,10 +9,11 @@ app.use(bodyParser.json());
 
 const db = mysql.createConnection({
   host: 'localhost',
-  user: 'newuser1', // Replace with your MySQL username
-  password: 'test123', // Replace with your MySQL password
-  database: 'budget_tracker', // Replace with your desired database name
+  user: 'userSQU', // Replace with your MySQL username
+  password: '8n0HEUsN8QRpjisv', // Replace with your MySQL password
+  database: 'sampledb', // Replace with your desired database name
 });
+
 
 db.connect((err) => {
   if (err) {

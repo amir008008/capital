@@ -296,6 +296,21 @@ useEffect(() => {
   populateExpensesDropdown(userId, monthYear);
 }, [selectedMonthIndex]);
 
+const calculateExpenseProgress = (totalAmount, usedAmount) => {
+  const remainingAmount = totalAmount - usedAmount;
+  const progress = (remainingAmount / totalAmount) * 100;
+  return Math.min(Math.max(progress, 0), 100); // ensures it's between 0 and 100
+};
+
+const ProgressBar = ({ totalAmount, usedAmount }) => {
+  const progress = calculateExpenseProgress(totalAmount, usedAmount);
+  return (
+    <div className="progress-bar-container">
+      <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
+    </div>
+  );
+};
+
 
 
 const getExpensesOfType = (expenseType, status) => {
