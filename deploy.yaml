@@ -1,52 +1,19 @@
----
-# Backend Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: myapp-backend-deployment
+  name: myapp-deployment
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: myapp-backend
+      app: myapp
   template:
     metadata:
       labels:
-        app: myapp-backend
+        app: myapp
     spec:
       containers:
-      - name: myapp-backend
-        image: amirsh2023/myapp-backend:1.0.0
+      - name: myapp
+        image: amirsh2023/myapp:1.0.0
         ports:
         - containerPort: 5000
-
----
-# Backend Service
-apiVersion: v1
-kind: Service
-metadata:
-  name: myapp-backend-service
-spec:
-  selector:
-    app: myapp-backend
-  ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 5000
-  type: LoadBalancer
-
----
-# Frontend Deployment
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: myapp-frontend-deployment
-# ... rest of the frontend deployment spec
-
----
-# Frontend Service
-apiVersion: v1
-kind: Service
-metadata:
-  name: myapp-frontend-service
-# ... rest of the frontend service spec
