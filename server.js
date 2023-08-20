@@ -5,7 +5,7 @@ const mysql = require('mysql');
 
 const app = express();
 app.use(cors());
-app.use(cors({ origin: 'http://capital-react-web-app-your-namespace.apps.your-openshift-cluster-domain.com' }));
+app.use(bodyParser.json());
 
 const db = mysql.createConnection({
   host: process.env.DB_HOST || 'mysql',
