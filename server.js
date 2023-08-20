@@ -8,7 +8,7 @@ app.use(cors());
 app.use(bodyParser.json());
 
 const db = mysql.createConnection({
-  host: 'localhost',
+  host: 'mysql',
   user: 'userSQU', // Replace with your MySQL username
   password: '8n0HEUsN8QRpjisv', // Replace with your MySQL password
   database: 'sampledb', // Replace with your desired database name
