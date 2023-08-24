@@ -331,12 +331,12 @@ app.get('/preferences/:userId', (req, res) => {
     SELECT * FROM user_preferences WHERE user_id = ?
   `;
 
-  db.query(getPreferences, [userId], (err, results) => {
+  dbOld.query(getPreferences, [userId], (err, results) => {
     if (err) {
       console.error('Error fetching preferences:', err);
       return res.json({ success: false, error: err.message });
     }
-    console.error('noerror fetching preferences:', results[0]);
+    console.error('noerror fetching preferences:', results);
 
     res.json({ success: true, data: results[0] });  // Assuming each user has only one row of preferences.
   });
@@ -361,16 +361,25 @@ app.get('/api/fetch-user', (req, res) => {
         res.status(401).json({ success: false, error: 'Token verification failed' });
     }
 });
-
 // Endpoint to save or update user preferences
 app.post('/preferences/:userId', (req, res) => {
   const userId = req.params.userId;
   const { language, locale, currency, dateFormat, moneyFormat } = req.body;
 
+  console.log('Received Data:', {
+    userId,
+    language,
+    locale,
+    currency,
+    dateFormat,
+    moneyFormat
+  }); // Log incoming data
+
   // Check if user preferences already exist
   const checkQuery = `
     SELECT * FROM user_preferences WHERE user_id = ?
   `;
+  console.log('Check Query:', checkQuery, 'With Params:', [userId]);
 
   const insertPreferences = `
     INSERT INTO user_preferences (user_id, language, locale, currency, dateFormat, moneyFormat)
@@ -380,34 +389,47 @@ app.post('/preferences/:userId', (req, res) => {
   const updatePreferences = `
     UPDATE user_preferences SET language = ?, locale = ?, currency = ?, dateFormat = ?, moneyFormat = ? WHERE user_id = ?
   `;
-
-  db.query(checkQuery, [userId], (err, results) => {
+  console.log('About to run checkQuery...');
+  dbOld.query(checkQuery, [userId], (err, results) => {
+    console.log('Inside checkQuery callback...');
     if (err) {
       console.error('Error checking preferences:', err);
       return res.json({ success: false, error: err.message });
     }
 
+    console.log('Check Query Result:', results[0]); // Log the result of check query
+
     if (results.length > 0) {
+      console.log('Updating Preferences with Query:', updatePreferences, 'And Params:', [language, locale, currency, dateFormat, moneyFormat, userId]);
       // Preferences already exist, so update
-      db.query(updatePreferences, [language, locale, currency, dateFormat, moneyFormat, userId], (err, result) => {
+      dbOld.query(updatePreferences, [language, locale, currency, dateFormat, moneyFormat, userId], (err, result) => {
         if (err) {
           console.error('Error updating preferences:', err);
           return res.json({ success: false, error: err.message });
         }
+        // console.log('Update Result:', result); // Printing the result after update
         res.json({ success: true, message: 'Preferences updated successfully!' });
+        // console.log('Server Response:', res);
+
       });
     } else {
+      console.log('Inserting Preferences with Query:', insertPreferences, 'And Params:', [userId, language, locale, currency, dateFormat, moneyFormat]);
       // No preferences found, so insert new entry
-      db.query(insertPreferences, [userId, language, locale, currency, dateFormat, moneyFormat], (err, result) => {
+      dbOld.query(insertPreferences, [userId, language, locale, currency, dateFormat, moneyFormat], (err, result) => {
         if (err) {
           console.error('Error inserting preferences:', err);
           return res.json({ success: false, error: err.message });
         }
+        console.log('Insert Result:', result); // Printing the result after insert
         res.json({ success: true, message: 'Preferences saved successfully!' });
+        // console.log('Server Response:', res);
+
       });
     }
   });
 });
+
+
 const jwt = require('jsonwebtoken');
 const SECRET_KEY = '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';  // Make sure to use a strong secret key and ideally, store it in an environment variable
 
