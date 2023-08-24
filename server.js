@@ -58,7 +58,7 @@ app.post('/add-expense', (req, res) => {
   const { user_id, category, expenseName, expenseAmount, expenseType, expenseMonth } = req.body;
 
   const query = 'INSERT INTO expenses (user_id, category_id, expense_name, expense_amount, expense_type, expense_month) VALUES (?, ?, ?, ?, ?, ?)';
-  db.query(query, [user_id, category, expenseName, expenseAmount, expenseType, expenseMonth], (err, result) => {
+  dbOld.query(query, [user_id, category, expenseName, expenseAmount, expenseType, expenseMonth], (err, result) => {
     if (err) {
       console.error('Error adding expense:', err);
       res.json({ success: false, error: err.message });
@@ -79,7 +79,7 @@ app.put('/edit-budget-status', (req, res) => {
   console.log('Query Params:', queryParams);
 
   // Perform the query
-  db.query(query, queryParams, (err, result) => {
+  dbOld.query(query, queryParams, (err, result) => {
     if (err) {
       console.error('Error editing budget status:', err);
       res.json({ success: false, error: err.message });
@@ -122,7 +122,7 @@ app.put('/edit-expense', (req, res) => {
   const query = 'UPDATE expenses SET used_already = ? WHERE id = ? AND user_id = ?';
 
   // Executing the query
-  db.query(query, [usedAlready, expenseId, user_id], (err, result) => {
+  dbOld.query(query, [usedAlready, expenseId, user_id], (err, result) => {
     if (err) {
       console.error('Error editing expense:', err);
       res.json({ success: false, error: err.message });
@@ -275,7 +275,7 @@ app.delete('/delete-expense', (req, res) => {
   const query = 'DELETE FROM expenses WHERE id = ? AND user_id = ?';
 
   // Executing the query
-  db.query(query, [expenseId, user_id], (err, result) => {
+  dbOld.query(query, [expenseId, user_id], (err, result) => {
     if (err) {
       console.error('Error deleting expense:', err);
       res.json({ success: false, error: err.message });
@@ -313,7 +313,7 @@ app.get('/get-expenses', (req, res) => {
   console.log('Query Params:', queryParams);
 
   // Perform the query
-  db.query(query, queryParams, (err, result) => {
+  dbOld.query(query, queryParams, (err, result) => {
     if (err) {
       console.error('Error fetching expenses:', err);
       res.json({ success: false, error: err.message });
@@ -327,16 +327,23 @@ app.get('/get-expenses', (req, res) => {
 app.get('/preferences/:userId', (req, res) => {
   const userId = req.params.userId;
 
+  console.log('Received request to fetch preferences for userId:', userId); // Log incoming request
+
   const getPreferences = `
     SELECT * FROM user_preferences WHERE user_id = ?
   `;
 
   dbOld.query(getPreferences, [userId], (err, results) => {
     if (err) {
-      console.error('Error fetching preferences:', err);
+      console.error('Error fetching preferences for userId:', userId, 'Error:', err);
       return res.json({ success: false, error: err.message });
     }
-    console.error('noerror fetching preferences:', results);
+    
+    if (results && results.length) {
+      console.log('Successfully fetched preferences for userId:', userId, 'Data:', JSON.stringify(results[0]).substr(0, 300) + '...'); // Logging first 300 characters for brevity. Adjust as needed.
+    } else {
+      console.log('No preferences found for userId:', userId);
+    }
 
     res.json({ success: true, data: results[0] });  // Assuming each user has only one row of preferences.
   });
@@ -567,7 +574,7 @@ app.delete('/api/deleteUser', async (req, res) => {
       await connection.beginTransaction();
 
       // Step 1: Delete user's expenses (assuming there's a table called user_expenses)
-      await connection.query('DELETE FROM user_expenses WHERE user_id = ?', [userId]);
+      await connection.query('DELETE FROM expenses WHERE user_id = ?', [userId]);
 
       // Step 2: Delete user's budget statuses
       await connection.query('DELETE FROM budget_status WHERE user_id = ?', [userId]);
