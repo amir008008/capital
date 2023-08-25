@@ -11,6 +11,11 @@ const mysql = require('mysql2'); // <-- Update here
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+// Allow specific origin
+app.use(cors({
+  origin: 'http://app.capitalai.info'
+}));
+
 
 const dbConfig = {
     host: 'mysql',
