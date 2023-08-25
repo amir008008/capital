@@ -1,5 +1,5 @@
-const OpenAI = require('openai');
-const openai = new OpenAI({ apiKey: "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" });
+//const OpenAI = require('openai');
+//const openai = new OpenAI({ apiKey: "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" });
 const { SocksProxyAgent } = require('socks-proxy-agent');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -9,7 +9,7 @@ const { createPool } = require('mysql2/promise');
 const mysql = require('mysql2'); // <-- Update here
 
 const app = express();
-app.use(cors());
+// app.use(cors());
 app.use(bodyParser.json());
 // Allow specific origin
 app.use(cors({
