@@ -9,12 +9,12 @@ const { createPool } = require('mysql2/promise');
 const mysql = require('mysql2'); // <-- Update here
 
 const app = express();
-// app.use(cors());
+ app.use(cors());
 app.use(bodyParser.json());
 // Allow specific origin
-app.use(cors({
-  origin: 'http://app.capitalai.info'
-}));
+// app.use(cors({
+//   origin: 'http://app.capitalai.info'
+// }));
 
 
 const dbConfig = {
@@ -691,71 +691,42 @@ app.get('/api/fetch-user', (req, res) => {
         res.status(401).json({ success: false, error: 'Token verification failed' });
     }
 });
-// Endpoint to save or update user preferences
 app.post('/preferences/:userId', (req, res) => {
   const userId = req.params.userId;
-  const { language, locale, currency, dateFormat, moneyFormat } = req.body;
-
-  // //console.log('Received Data:', {
-  //   userId,
-  //   language,
-  //   locale,
-  //   currency,
-  //   dateFormat,
-  //   moneyFormat
-  // }); // Log incoming data
+  const { language, locale, currency, dateFormat, moneyFormat, ai_coach, monthly_income } = req.body;
 
   // Check if user preferences already exist
-  const checkQuery = `
-    SELECT * FROM user_preferences WHERE user_id = ?
-  `;
-  // //console.log('Check Query:', checkQuery, 'With Params:', [userId]);
+  const checkQuery = `SELECT * FROM user_preferences WHERE user_id = ?`;
 
-  const insertPreferences = `
-    INSERT INTO user_preferences (user_id, language, locale, currency, dateFormat, moneyFormat)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `;
+  const insertPreferences = `INSERT INTO user_preferences (user_id, language, locale, currency, dateFormat, moneyFormat, ai_coach, monthly_income) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
 
-  const updatePreferences = `
-    UPDATE user_preferences SET language = ?, locale = ?, currency = ?, dateFormat = ?, moneyFormat = ? WHERE user_id = ?
-  `;
-  //console.log('About to run checkQuery...');
+  const updatePreferences = `UPDATE user_preferences SET language = COALESCE(?, language), locale = COALESCE(?, locale), currency = COALESCE(?, currency), dateFormat = COALESCE(?, dateFormat), moneyFormat = COALESCE(?, moneyFormat), ai_coach = COALESCE(?, ai_coach), monthly_income = COALESCE(?, monthly_income) WHERE user_id = ?`;
+
   dbOld.query(checkQuery, [userId], (err, results) => {
-    //console.log('Inside checkQuery callback...');
-    if (err) {
-      console.error('Error checking preferences:', err);
-      return res.json({ success: false, error: err.message });
-    }
-
-    //console.log('Check Query Result:', results[0]); // Log the result of check query
-
-    if (results.length > 0) {
-      //console.log('Updating Preferences with Query:', updatePreferences, 'And Params:', [language, locale, currency, dateFormat, moneyFormat, userId]);
-      // Preferences already exist, so update
-      dbOld.query(updatePreferences, [language, locale, currency, dateFormat, moneyFormat, userId], (err, result) => {
-        if (err) {
-          console.error('Error updating preferences:', err);
+      if (err) {
+          console.error('Error checking preferences:', err);
           return res.json({ success: false, error: err.message });
-        }
-        // //console.log('Update Result:', result); // Printing the result after update
-        res.json({ success: true, message: 'Preferences updated successfully!' });
-        // //console.log('Server Response:', res);
+      }
 
-      });
-    } else {
-      //console.log('Inserting Preferences with Query:', insertPreferences, 'And Params:', [userId, language, locale, currency, dateFormat, moneyFormat]);
-      // No preferences found, so insert new entry
-      dbOld.query(insertPreferences, [userId, language, locale, currency, dateFormat, moneyFormat], (err, result) => {
-        if (err) {
-          console.error('Error inserting preferences:', err);
-          return res.json({ success: false, error: err.message });
-        }
-        //console.log('Insert Result:', result); // Printing the result after insert
-        res.json({ success: true, message: 'Preferences saved successfully!' });
-        // //console.log('Server Response:', res);
-
-      });
-    }
+      if (results.length > 0) {
+          // Preferences already exist, so update
+          dbOld.query(updatePreferences, [language, locale, currency, dateFormat, moneyFormat, ai_coach, monthly_income, userId], (err, result) => {
+              if (err) {
+                  console.error('Error updating preferences:', err);
+                  return res.json({ success: false, error: err.message });
+              }
+              res.json({ success: true, message: 'Preferences updated successfully!' });
+          });
+      } else {
+          // No preferences found, so insert new entry
+          dbOld.query(insertPreferences, [userId, language, locale, currency, dateFormat, moneyFormat, ai_coach, monthly_income], (err, result) => {
+              if (err) {
+                  console.error('Error inserting preferences:', err);
+                  return res.json({ success: false, error: err.message });
+              }
+              res.json({ success: true, message: 'Preferences saved successfully!' });
+          });
+      }
   });
 });
 
@@ -796,7 +767,7 @@ app.post('/api/login', async (req, res) => {
         const token = jwt.sign(
           { id: user.id, username: user.username, email: user.email, country: user.country },
           SECRET_KEY,
-          { expiresIn: '1h' }
+          { expiresIn: '960h' }
         );
 
         return res.json({
