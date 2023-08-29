@@ -87,6 +87,44 @@ app.post('/add-expense', (req, res) => {
     }
   });
 });
+
+app.post('/edit-expense', (req, res) => {
+  // Log the request body to inspect the values
+  console.log('Received request to edit expense:', req.body);
+
+  const { expenseId, expenseName, expenseAmount } = req.body;
+
+  // Log the extracted values
+  console.log('Extracted values:', {
+    expenseId,
+    expenseName,
+    expenseAmount
+  });
+
+  const query = 'UPDATE expenses SET expense_name = ?, expense_amount = ? WHERE id = ?';
+
+  // Log the query and values being used
+  console.log('Executing query:', query, [expenseName, expenseAmount, expenseId]);
+
+  dbOld.query(query, [expenseName, expenseAmount, expenseId], (err, result) => {
+    if (err) {
+      console.error('Error editing expense:', err);
+      res.json({ success: false, error: err.message });
+    } else {
+      // Log the result of the query
+      console.log('Query result:', result);
+
+      if (result.affectedRows === 0) {
+        res.json({ success: false, error: "No expense found to update" });
+      } else {
+        res.json({ success: true });
+      }
+    }
+  });
+});
+
+
+
 app.put('/delete-transaction', (req, res) => {
   const transaction_id = req.body.transaction_id;
 
