@@ -674,7 +674,9 @@ app.get('/preferences/:userId', (req, res) => {
 
 
 
-
+const getCurrentTimestamp = () => {
+  return new Date().toISOString();
+};
 
 app.get('/api/fetch-user', (req, res) => {
     const bearerToken = req.headers.authorization;
@@ -694,7 +696,7 @@ app.get('/api/fetch-user', (req, res) => {
 app.post('/preferences/:userId', (req, res) => {
   const userId = req.params.userId;
   const { language, locale, currency, dateFormat, moneyFormat, ai_coach, monthly_income } = req.body;
-
+  console.log(`[${getCurrentTimestamp()}] Attempting to set preferences for user ${userId}:`, req.body);
   // Check if user preferences already exist
   const checkQuery = `SELECT * FROM user_preferences WHERE user_id = ?`;
 
@@ -704,26 +706,33 @@ app.post('/preferences/:userId', (req, res) => {
 
   dbOld.query(checkQuery, [userId], (err, results) => {
       if (err) {
+         console.log(`[${getCurrentTimestamp()}] Attempting to set preferences for user ${userId}:`, req.body);
           console.error('Error checking preferences:', err);
           return res.json({ success: false, error: err.message });
       }
 
       if (results.length > 0) {
           // Preferences already exist, so update
+         // console.log(`[${getCurrentTimestamp()}] User ${userId} already has preferences. Updating...`);
           dbOld.query(updatePreferences, [language, locale, currency, dateFormat, moneyFormat, ai_coach, monthly_income, userId], (err, result) => {
               if (err) {
+                console.error(`[${getCurrentTimestamp()}] Error updating preferences for user ${userId}:`, err);
                   console.error('Error updating preferences:', err);
                   return res.json({ success: false, error: err.message });
               }
+             // console.log(`[${getCurrentTimestamp()}] Preferences updated successfully for user ${userId}.`);
               res.json({ success: true, message: 'Preferences updated successfully!' });
           });
       } else {
+        //console.log(`[${getCurrentTimestamp()}] No preferences found for user ${userId}. Inserting new entry...`);
           // No preferences found, so insert new entry
           dbOld.query(insertPreferences, [userId, language, locale, currency, dateFormat, moneyFormat, ai_coach, monthly_income], (err, result) => {
               if (err) {
+                console.error(`[${getCurrentTimestamp()}] Error inserting preferences for user ${userId}:`, err);
                   console.error('Error inserting preferences:', err);
                   return res.json({ success: false, error: err.message });
               }
+              //console.log(`[${getCurrentTimestamp()}] Preferences saved successfully for user ${userId}.`);
               res.json({ success: true, message: 'Preferences saved successfully!' });
           });
       }
