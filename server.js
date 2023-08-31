@@ -216,6 +216,68 @@ app.put('/delete-transaction', (req, res) => {
       });
   });
 });
+app.put('/update-transaction', (req, res) => {
+  const { transaction_id, newTransactionValues } = req.body;
+
+  if (!transaction_id) {
+      return res.status(400).json({ success: false, message: 'Transaction ID is required.' });
+  }
+
+  // First, get the old transaction details
+  const getTransactionQuery = 'SELECT * FROM transactions WHERE id = ?';
+  dbOld.query(getTransactionQuery, [transaction_id], (err, transactionResults) => {
+      if (err) {
+          console.error('Error fetching old transaction details:', err);
+          return res.status(500).json({ success: false, error: err.message });
+      }
+
+      const oldTransaction = transactionResults[0];
+
+      // Calculate difference in transaction amount (if it was changed)
+      const amountDifference = parseFloat(newTransactionValues.transaction_amount) - parseFloat(oldTransaction.transaction_amount);
+
+      const expenseMonth = newTransactionValues.transaction_date.slice(0, 7);
+
+      // Now, find and update the matching expense
+      const searchQuery = 'SELECT * FROM expenses WHERE user_id = ? AND expense_name = ? AND expense_month like ?';
+      dbOld.query(searchQuery, [oldTransaction.user_id, oldTransaction.matched_expense_name, `${expenseMonth}%`], (err, expenseResults) => {
+          if (err) {
+              console.error('Error searching for matching expense:', err);
+              return res.json({ success: false, error: err.message });
+          }
+
+          if (expenseResults.length > 0) {
+              const expense = expenseResults[0];
+              const newUsedAlready = parseFloat(expense.used_already) + amountDifference;
+
+              const updateExpenseQuery = 'UPDATE expenses SET used_already = ? WHERE id = ?';
+              dbOld.query(updateExpenseQuery, [newUsedAlready, expense.id], (err) => {
+                  if (err) {
+                      console.error('Error updating used_already:', err);
+                      return res.json({ success: false, error: err.message });
+                  }
+
+                  // Now, update the transaction with new values
+                  const updateTransactionQuery = 'UPDATE transactions SET transaction_name = ?, transaction_amount = ? WHERE id = ?';
+                  dbOld.query(updateTransactionQuery, [newTransactionValues.transaction_name, newTransactionValues.transaction_amount, transaction_id], (err) => {
+                      if (err) {
+                          console.error('Error updating transaction:', err);
+                          return res.json({ success: false, error: err.message });
+                      }
+
+                      return res.json({
+                          success: true,
+                          message: 'Transaction updated and corresponding expense adjusted successfully.'
+                      });
+                  });
+              });
+          } else {
+              console.warn(`No expense found for user ID: ${oldTransaction.user_id}, expense name: ${oldTransaction.matched_expense_name}, and expense month: ${expenseMonth}. Transaction with ID: ${transaction_id} not updated.`);
+              return res.status(404).json({ success: false, message: 'Matching expense not found.' });
+          }
+      });
+  });
+});
 
 
 
@@ -314,20 +376,25 @@ app.post('/add-log-old', (req, res) => {
 });
 
 async function insertTransaction(data) {
-    console.log("1/15: Starting transaction insertion...");
-    const { user_id, expenseName, expenseAmount, expenseMonth } = data;
-    const insertTransactionQuery = 'INSERT INTO transactions (user_id, transaction_name, transaction_amount, transaction_date, matched_expense_name, status) VALUES (?, ?, ?, ?, ?, ?)';
-    return new Promise((resolve, reject) => {
-        dbOld.query(insertTransactionQuery, [user_id, expenseName, expenseAmount, `${expenseMonth}-01`, expenseName, 'deleted'], (err, result) => {
-            if (err) {
-                console.error("2/15: Error inserting transaction.", err);
-                reject(err);
-            } else {
-                console.log("2/15: Transaction insertion successful!");
-                resolve(result.insertId);
-            }
-        });
-    });
+  console.log("1/15: Starting transaction insertion...");
+  const { user_id, expenseName, expenseAmount, expenseMonth } = data;
+  
+  // Assuming you're using MySQL, this function will get the current timestamp in the desired format.
+  const currentTimeStamp = mysql.raw('CURRENT_TIMESTAMP');
+  
+  const insertTransactionQuery = 'INSERT INTO transactions (user_id, transaction_name, transaction_amount, transaction_date, matched_expense_name, status, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)';
+  
+  return new Promise((resolve, reject) => {
+      dbOld.query(insertTransactionQuery, [user_id, expenseName, expenseAmount, `${expenseMonth}-01`, expenseName, 'deleted', currentTimeStamp], (err, result) => {
+          if (err) {
+              console.error("2/15: Error inserting transaction.", err);
+              reject(err);
+          } else {
+              console.log("2/15: Transaction insertion successful!");
+              resolve(result.insertId);
+          }
+      });
+  });
 }
 
 async function searchExpense(data) {
@@ -916,6 +983,95 @@ app.post("/chat", async (req, res) => {
     }
   }
 });
+
+// Apply rate limiter to the ChatGPT endpoint
+// Apply rate limiter to the ChatGPT endpoint
+// app.use("/chatWithCoach", limiter);
+
+// app.post("/chatWithCoach", async (req, res) => {
+//   const { prompt, max_tokens, user_id } = req.body;
+
+//   // Fetch the user's preferred AI coach from the database
+//   const fetchCoachPreference = 'SELECT ai_coach FROM user_preferences WHERE user_id = ?';
+//   let aiCoachPersonality = "";
+  
+//   db.query(fetchCoachPreference, [user_id], (err, result) => {
+//     if (err) {
+//       console.error('Error fetching AI coach preference:', err);
+//       return res.status(500).json({ error: "Error fetching AI coach preference." });
+//     }
+
+//     // Set the coach's personality based on the user's preference
+//     if (result && result[0] && result[0].ai_coach) {
+//       if (result[0].ai_coach === "coach1") {
+//         aiCoachPersonality = "Stronger Personality – (ENTJ Myers 'Analytical')";
+//       } else if (result[0].ai_coach === "coach2") {
+//         aiCoachPersonality = "Softer Personality - (ISFP Myers 'Supportive')";
+//       }
+//     }
+
+//     // Construct the prompt with the AI coach's personality
+//     const modifiedPrompt = `${aiCoachPersonality}: ${prompt} reply as a AI financial coach with personality.`;
+
+//     // Rest of your endpoint logic...
+
+//     try {
+//       const completion = await openai.completions.create({
+//         model: "text-davinci-003",
+//         prompt: modifiedPrompt,
+//         max_tokens: max_tokens || 1000
+//       });
+
+//     //console.log("Completion response:", completion);
+
+//     // Extracting token usages
+//     const {
+//         prompt_tokens, 
+//         completion_tokens, 
+//         total_tokens
+//     } = completion.usage;
+
+//     // Save the query, response, model, and token usage to the database
+//     const queryText = prompt;
+//     const responseText = completion.choices[0].text.trim();
+//     const modelName = "text-davinci-003";  // or you can dynamically get it from the completion response, if available
+
+//     const saveQuery = `
+//         INSERT INTO chatgpt_queries (user_id, query, response, model, prompt_tokens, completion_tokens, total_tokens,api_endpoint)
+//         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+//     `;
+
+//     db.query(saveQuery, [user_id, queryText, responseText, modelName, prompt_tokens, completion_tokens, total_tokens,"/chat"], (err, result) => {
+//         if (err) {
+//             console.error('Error saving query-response:', err);
+//         } else {
+//             //console.log('Query-response saved successfully!');
+//         }
+//     });
+
+//     res.send(responseText);
+
+
+//   } catch (error) {
+//     console.error("Error generating completion:", error);
+
+//     if (error instanceof OpenAI.APIError) {
+//       console.error("OpenAI API Error:", error);
+
+//       res.status(500).json({
+//         error: error.message,
+//         code: error.code,
+//         type: error.type,
+//         status: error.status
+//       });
+//     } else {
+//       console.error("Non-API error:", error);
+
+//       res.status(500).json({ error: "Error generating completion." });
+//     }
+//   }
+// });
+
 
 
 // Apply rate limiter to the ChatGPT endpoint
