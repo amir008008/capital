@@ -17,3 +17,9 @@ spec:
         image: amirsh2023/myapp:1.0.0
         ports:
         - containerPort: 5000
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-api-key
+              key: OPENAI_API_KEY
