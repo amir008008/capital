@@ -1,5 +1,14 @@
-//const OpenAI = require('openai');
-//const openai = new OpenAI({ apiKey: "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" });
+const OpenAI = require('openai');
+const openai = new OpenAI({ apiKey: "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" });
+openai.api_key = "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";
+// const { Configuration, OpenAIApi } = require("openai");
+
+// const configuration = new Configuration({
+//   apiKey: "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",
+// });
+
+// const openai = new OpenAIApi(configuration);  // You can initialize this once and reuse
+const axios = require('axios');
 const { SocksProxyAgent } = require('socks-proxy-agent');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -208,7 +217,7 @@ app.put('/delete-transaction', (req, res) => {
 
 
 
-app.post('/add-log', (req, res) => {
+app.post('/add-log-old', (req, res) => {
   const { user_id, category, expenseName, expenseAmount, expenseType, expenseMonth } = req.body;
   //console.log("Request Body:", req.body);
 
@@ -273,7 +282,7 @@ app.post('/add-log', (req, res) => {
                                console.error('Error updating transaction:', err);
                                return res.json({ success: false, error: err.message });
                            }
-                           //console.log(`Updated transaction with ID: ${transactionResult.insertId} to match "Other" expense.`);
+                           console.log(`Updated transaction with ID: ${transactionResult.insertId} to match "Other" expense.`);
                        });
                   } else {
                       // If even "Other" doesn't exist for the month, create it
@@ -301,9 +310,350 @@ app.post('/add-log', (req, res) => {
       });
   });
 });
+
+async function insertTransaction(data) {
+    console.log("1/15: Starting transaction insertion...");
+    const { user_id, expenseName, expenseAmount, expenseMonth } = data;
+    const insertTransactionQuery = 'INSERT INTO transactions (user_id, transaction_name, transaction_amount, transaction_date, matched_expense_name, status) VALUES (?, ?, ?, ?, ?, ?)';
+    return new Promise((resolve, reject) => {
+        dbOld.query(insertTransactionQuery, [user_id, expenseName, expenseAmount, `${expenseMonth}-01`, expenseName, 'deleted'], (err, result) => {
+            if (err) {
+                console.error("2/15: Error inserting transaction.", err);
+                reject(err);
+            } else {
+                console.log("2/15: Transaction insertion successful!");
+                resolve(result.insertId);
+            }
+        });
+    });
+}
+
+async function searchExpense(data) {
+    console.log("3/15: Searching for expense...");
+    const { user_id, expenseName, expenseMonth } = data;
+    const searchQuery = 'SELECT * FROM expenses WHERE user_id = ? AND expense_name = ? AND expense_month like ?';
+    return new Promise((resolve, reject) => {
+        dbOld.query(searchQuery, [user_id, expenseName, `${expenseMonth}%`], (err, results) => {
+            if (err) {
+                console.error("4/15: Error searching for expense.", err);
+                reject(err);
+            } else {
+                console.log("4/15: Search for expense completed!");
+                resolve(results);
+            }
+        });
+    });
+}
+
+async function updateExpense(expense, data) {
+    console.log("5/15: Updating expense...");
+    const { expenseAmount } = data;
+    const newUsedAlready = (parseFloat(expense.used_already) || 0) + parseFloat(expenseAmount);
+    const updateQuery = 'UPDATE expenses SET used_already = ? WHERE id = ?';
+    return new Promise((resolve, reject) => {
+        dbOld.query(updateQuery, [newUsedAlready, expense.id], (err) => {
+            if (err) {
+                console.error("6/15: Error updating expense.", err);
+                reject(err);
+            } else {
+                console.log("6/15: Expense update successful!");
+                resolve();
+            }
+        });
+    });
+}
+
+async function updateExpenseById(matchedExpenseId, data,transactionId) {
+  console.log("7/15: Updating expense by ID...", matchedExpenseId);
+  //console.log("7/15: Updating expense by Data...", data);
+  console.log("7/15: Updating expense by Amount...", parseFloat(data.expenseAmount));
+
+  const expenseAmount = parseFloat(data.expenseAmount);
+  const updateQuery = 'UPDATE expenses SET used_already = COALESCE(used_already, 0) + ? WHERE id = ?';
+  
+  return new Promise((resolve, reject) => {
+      dbOld.query(updateQuery, [expenseAmount, matchedExpenseId], async (err) => {
+          if (err) {
+              console.error("8/15: Error updating expense by ID.", err);
+              reject(err);
+          } else {
+              console.log("8/15: Expense update by ID successful!");
+
+              // Fetch the expense_name for the given ID from expenses table
+              const fetchExpenseNameQuery = 'SELECT expense_name FROM expenses WHERE id = ?';
+              dbOld.query(fetchExpenseNameQuery, [matchedExpenseId], (err, results) => {
+                  if (err) {
+                      console.error('Error fetching expense name:', err);
+                      reject(err);
+                  } else {
+                      console.log('Fetching expense name: ',results[0].expense_name);
+                      const expenseName = results[0].expense_name;
+
+                      // Update the matched_expense_name in transactions table based on fetched expense_name
+                      const updateTransactionQuery = 'UPDATE transactions SET matched_expense_name = ?, status = "alive" WHERE id = ?';
+                      dbOld.query(updateTransactionQuery, [expenseName, transactionId], (err) => {
+                          if (err) {
+                              console.error('Error updating transaction:', err);
+                              reject(err); // make sure to reject here to send error back to caller
+                          } else {
+                              console.log(`Updated transaction with ID: ${transactionId} to match "${expenseName}" expense and set status to "alive".`);
+                              resolve();
+                          }
+                      });
+                  }
+              });
+          }
+      });
+  });
+}
+
+
+app.post('/add-log', async (req, res) => {
+  console.log("9/15: Received POST request for smart-add-log...", req.body);
+  const system_message = `
+      Please classify the following expense based on its details:
+      User Query: ${req.body.expenseName}
+              `;
+  try {
+      const transactionId = await insertTransaction(req.body); // capture the returned transaction ID
+      const expenses = await searchExpense(req.body);
+      if (expenses.length) {
+          console.log("10/15: Expense found! Going to update it...");
+          await updateExpense(expenses[0], req.body);
+      } else {
+          console.log("11/15: Expense not found. Trying matched expense logic...");
+
+          const result = await Promise.race([
+            getMatchedExpenseLogic(req.body.user_id, req.body.expenseMonth, system_message)
+            .then(matchedExpenseId => {
+                if (matchedExpenseId === '0') {
+                    return { status: "not-resolved", matchedExpenseId }; 
+                } else {
+                    return { status: "resolved", matchedExpenseId };
+                }
+            }),
+            new Promise(resolve => setTimeout(() => resolve({ status: "pending" }), 3000)) // 3 seconds timeout
+        ]);
+        
+
+          console.log("Promise Status:", result.status);
+          console.log("Promise result.matchedExpenseId:", result.matchedExpenseId.matchedExpenseId);
+
+          if (result.status === "resolved") {
+            const matchedExpenseId = result.matchedExpenseId.matchedExpenseId;
+            if (matchedExpenseId && matchedExpenseId !== '0') {
+                console.log("Promise Status: Matched expense found. Going to update it...");
+                await updateExpenseById(matchedExpenseId, req.body, transactionId);
+            } else {
+                console.log("Promise Status: No matched expense found. Going to create or update 'Other' expense...");
+                await createOrUpdateOtherExpense(req.body, transactionId);
+            }
+        } else {
+            console.error("Promise Status: Timeout reached when trying to get matched expense!");
+        }
+        
+      }
+      console.log("14/15: All processes successful! Sending success response...");
+      res.json({ success: true, message: 'Processed successfully' });
+  } catch (error) {
+      console.error("15/15: Error processing request:", error.message);
+      res.json({ success: false, error: error.message });
+  }
+});
+
+
+async function createOrUpdateOtherExpense(data,transactionId) {
+  console.log("16/20: Starting to create or update 'Other' expense...");
+  const { user_id, expenseAmount, expenseMonth, category, expenseType } = data;
+
+  // Search for an "Other" expense in the specified month
+  const searchQuery = 'SELECT * FROM expenses WHERE user_id = ? AND expense_name = "Other" AND expense_month like ?';
+  return new Promise((resolve, reject) => {
+      dbOld.query(searchQuery, [user_id, `${expenseMonth}%`], async (err, otherResults) => {
+          if (err) {
+              console.error("17/20: Error searching for 'Other' expense.", err);
+              reject(err);
+          } else if (otherResults.length > 0) {
+              // If "Other" expense exists, update it
+              console.log("18/20: 'Other' expense found! Going to update it...");
+              const firstMatchingOther = otherResults[0];
+              const newUsedAlready = (parseFloat(firstMatchingOther.used_already) || 0) + parseFloat(expenseAmount);
+              const updateQuery = 'UPDATE expenses SET used_already = ? WHERE id = ?';
+
+              dbOld.query(updateQuery, [newUsedAlready, firstMatchingOther.id], (err) => {
+                  if (err) {
+                      console.error("19/20: Error updating 'Other' expense.", err);
+                      reject(err);
+                  } else {
+                      console.log(`19/20: Successfully updated 'Other' expense with ID ${firstMatchingOther.id}!`);
+                      resolve({ success: true, message: `Updated "Other" expense with ID ${firstMatchingOther.id}` });
+                  }
+              });
+              // Update the matched_expense_name in transactions table to "Other"
+              const updateTransactionQuery = 'UPDATE transactions SET matched_expense_name = "Other", status = "alive" WHERE id = ?';
+              dbOld.query(updateTransactionQuery, [transactionId], (err) => {
+                  if (err) {
+                      console.error('Error updating transaction:', err);
+                      return res.json({ success: false, error: err.message });
+                  }
+                  console.log(`Updated transaction with ID: ${transactionId} to match "Other" expense and set status to "alive".`);
+              });
+              
+          } else {
+              // If "Other" expense doesn't exist, create a new one
+              console.log("18/20: 'Other' expense not found. Going to create a new one...");
+              const insertQuery = 'INSERT INTO expenses (user_id, category_id, expense_name, expense_amount, expense_type, expense_month, used_already) VALUES (?, ?, "Other", 0, ?, ?, ?)';
+
+              dbOld.query(insertQuery, [user_id, category, expenseType, `${expenseMonth}-01`, expenseAmount], (err, result) => {
+                  if (err) {
+                      console.error("19/20: Error creating new 'Other' expense.", err);
+                      reject(err);
+                  } else {
+                      console.log(`20/20: Successfully created new 'Other' expense with ID: ${result.insertId}!`);
+                      resolve({ success: true, message: `Added new "Other" expense with ID: ${result.insertId}` });
+                  }
+              });
+              // Update the matched_expense_name in transactions table to "Other"
+              const updateTransactionQuery = 'UPDATE transactions SET matched_expense_name = "Other", status = "alive" WHERE id = ?';
+              dbOld.query(updateTransactionQuery, [transactionId], (err) => {
+                  if (err) {
+                      console.error('Error updating transaction:', err);
+                      return res.json({ success: false, error: err.message });
+                  }
+                  console.log(`Updated transaction with ID: ${transactionId} to match "Other" expense and set status to "alive".`);
+              });
+          }
+          
+      });
+  });
+}
+
+// app.post('/smart-add-log-old', async (req, res) => {
+//   const { user_id, category, expenseName, expenseAmount, expenseType, expenseMonth } = req.body;
+//   console.log("Request Body:", req.body);
+
+//   // Insert the new transaction first
+//   const insertTransactionQuery = 'INSERT INTO transactions (user_id, transaction_name, transaction_amount, transaction_date, matched_expense_name, status) VALUES (?, ?, ?, ?, ?, ?)';
+//   dbOld.query(insertTransactionQuery, [user_id, expenseName, expenseAmount, `${expenseMonth}-01`, expenseName, 'deleted'], async (err, transactionResult) => {
+//       if (err) {
+//           console.error('Error adding transaction:', err);
+//           return res.json({ success: false, error: err.message });
+//       }
+//       console.log(`Added new transaction with ID: ${transactionResult.insertId}`);
+
+//       const searchQuery = 'SELECT * FROM expenses WHERE user_id = ? AND expense_name = ? AND expense_month like ?';
+//       dbOld.query(searchQuery, [user_id, expenseName, `${expenseMonth}%`], async (err, results) => {
+//           if (err) {
+//               console.error('Error searching for expense:', err);
+//               return res.json({ success: false, error: err.message });
+//           }
+
+//           if (results.length > 0) {
+//               // If expense name matches
+//               const firstMatchingRecord = results[0];
+//               const newUsedAlready = (parseFloat(firstMatchingRecord.used_already) || 0) + parseFloat(expenseAmount);
+//               const updateQuery = 'UPDATE expenses SET used_already = ? WHERE id = ?';
+
+//               dbOld.query(updateQuery, [newUsedAlready, firstMatchingRecord.id], (err) => {
+//                   if (err) {
+//                       console.error('Error updating expense:', err);
+//                       return res.json({ success: false, error: err.message });
+//                   }
+//                   console.log(`Updated expense with ID ${firstMatchingRecord.id}`);
+//                   return res.json({ success: true, message: `Expense with Name: '${firstMatchingRecord.expense_name}' updated successfully.` });
+//               });
+//           } else {
+//                      // If name doesn't match, use /getmatchedexpense to get expense id
+//         const system_message = `
+//         Please classify the following expense based on its details:
+//         User Query: ${expenseName}
+//                 `;
+        
+//                 try {
+//                     // console.log('Querying /getmatchedexpense endpoint...');
+//                     // const matchedExpenseResponse = await axios.post('http://localhost:5000/getmatchedexpense', {
+//                     //     user_id: user_id,
+//                     //     expense_month: expenseMonth,
+//                     //     prompt: system_message
+//                     // });
+        
+//                     // if (matchedExpenseResponse.data.success) {
+//                     //     const matchedExpenseId = matchedExpenseResponse.data.matchedExpenseId;
+//                     console.log('Querying getMatchedExpenseLogic function...');
+//                     //const matchedExpenseResponse = await getMatchedExpenseLogic(user_id, expenseMonth, system_message);
+        
+//                     const result = await Promise.race([
+//                       getMatchedExpenseLogic(user_id, expenseMonth, system_message),
+//                       new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 500000))
+//                     ]);
+//                     console.log('ID Found: ',result.matchedExpenseId)
+//                     console.log('Result : ',result)
+//                     if (result.matchedExpenseId) {
+//                         const matchedExpenseId = matchedExpenseResponse.matchedExpenseId;
+        
+//                         // Use the matched expense id to update the expense
+//                         const updateQuery = 'UPDATE expenses SET used_already = used_already + ? WHERE id = ?';
+//                         dbOld.query(updateQuery, [expenseAmount, matchedExpenseId], (err) => {
+//                             if (err) {
+//                                 console.error('Error updating expense using matched expense ID:', err);
+//                                 return res.json({ success: false, error: err.message });
+//                             }
+//                             console.log(`Updated expense with ID ${matchedExpenseId} using matched expense ID.`);
+//                             return res.json({ success: true, message: `Expense with ID: ${matchedExpenseId} updated successfully.` });
+//                         });
+//                     } else {
+//                         console.log("No matched expense ID found.", matchedExpenseResponse.data.message);
+//                     }
+//                 } catch (error) {
+//                   console.error("Error in getMatchedExpenseLogic:", error.message);
+//                     console.error("Error querying /getmatchedexpense endpoint:", error);
+//                   console.error("Error with OpenAI completion:", error);
+//                   return res.json({ success: false, error: 'Error processing with OpenAI.' });
+//               }
+
+//               // If OpenAI also fails or returns '0', then try "Other" category
+//               dbOld.query(searchQuery, [user_id, 'Other', `${expenseMonth}%`], async (err, otherResults) => {
+//                   if (err) {
+//                       console.error('Error searching for Other expense:', err);
+//                       return res.json({ success: false, error: err.message });
+//                   }
+
+//                   if (otherResults.length > 0) {
+//                       const firstMatchingOther = otherResults[0];
+//                       const newUsedAlready = (parseFloat(firstMatchingOther.used_already) || 0) + parseFloat(expenseAmount);
+//                       const updateQuery = 'UPDATE expenses SET used_already = ? WHERE id = ?';
+
+//                       dbOld.query(updateQuery, [newUsedAlready, firstMatchingOther.id], (err) => {
+//                           if (err) {
+//                               console.error('Error updating Other expense:', err);
+//                               return res.json({ success: false, error: err.message });
+//                           }
+//                           console.log(`Updated "Other" expense with ID ${firstMatchingOther.id}`);
+//                           return res.json({ success: true, message: `Expense with Name: 'Other' updated successfully.` });
+//                       });
+//                   } else {
+//                       // If even "Other" doesn't exist for the month, create it
+//                       const insertQuery = 'INSERT INTO expenses (user_id, category_id, expense_name, expense_amount, expense_type, expense_month, used_already) VALUES (?, ?, \'Other\', 0, ?, ?, ?)';
+
+//                       dbOld.query(insertQuery, [user_id, category, expenseType, `${expenseMonth}-01`, expenseAmount], (err, result) => {
+//                           if (err) {
+//                               console.error('Error adding Other expense:', err);
+//                               return res.json({ success: false, error: err.message });
+//                           }
+//                           console.log(`Added new "Other" expense with ID: ${result.insertId}`);
+//                           return res.json({ success: true, message: 'New "Other" expense added successfully.' });
+//                       });
+//                   }
+//               });
+//           }
+//       });
+//   });
+// });
+
+
 app.get('/get-category-by-name', (req, res) => {
-  console.log('Received request for /get-category-by-name'); // Log when the route is hit
-  console.log('Query Parameters:', req.query); // Log the received query parameters
+  //console.log('Received request for /get-category-by-name'); // Log when the route is hit
+  //console.log('Query Parameters:', req.query); // Log the received query parameters
 
   const { expense_name, expense_month } = req.query;
   if (!expense_name || !expense_month) {
@@ -322,8 +672,8 @@ app.get('/get-category-by-name', (req, res) => {
       WHERE e.expense_name = ? AND e.expense_month LIKE ?
   `;
 
-  console.log('Constructed SQL:', sql); // Log the constructed SQL
-  console.log('Parameters:', [expense_name, `${expense_month}`]); // Log the SQL parameters
+  //console.log('Constructed SQL:', sql); // Log the constructed SQL
+  //console.log('Parameters:', [expense_name, `${expense_month}`]); // Log the SQL parameters
 
   // Execute the SQL query
   dbOld.query(sql, [expense_name, `${expense_month}%`], (err, results) => {
@@ -336,7 +686,7 @@ app.get('/get-category-by-name', (req, res) => {
           });
       }
 
-      console.log('SQL Results:', results); // Log the results from the SQL query
+      //console.log('SQL Results:', results); // Log the results from the SQL query
       res.json({
           success: true,
           data: results
@@ -346,15 +696,35 @@ app.get('/get-category-by-name', (req, res) => {
 
 app.get('/get-transactions', (req, res) => {
   const user_id = req.query.user_id;
+  const dateInput = req.query.date;  // Can be YYYY-MM or YYYY-MM-DD format
 
   if (!user_id) {
       return res.status(400).json({ success: false, message: 'User ID is required.' });
   }
 
-  // Modified query to avoid fetching deleted transactions
-  const fetchQuery = 'SELECT * FROM transactions WHERE user_id = ? AND status != "deleted"';
+  if (!dateInput) {
+      return res.status(400).json({ success: false, message: 'Date is required.' });
+  }
 
-  dbOld.query(fetchQuery, [user_id], (err, results) => {
+  let fetchQuery;
+  if (dateInput.length === 7) {  // YYYY-MM format
+      fetchQuery = `
+        SELECT * FROM transactions 
+        WHERE user_id = ? 
+        AND status != "deleted"
+        AND MONTH(transaction_date) = MONTH(STR_TO_DATE(?, '%Y-%m'))
+        AND YEAR(transaction_date) = YEAR(STR_TO_DATE(?, '%Y-%m'))
+      `;
+  } else {  // Assuming YYYY-MM-DD format
+      fetchQuery = `
+        SELECT * FROM transactions 
+        WHERE user_id = ? 
+        AND status != "deleted"
+        AND DATE(transaction_date) like ?
+      `;
+  }
+
+  dbOld.query(fetchQuery, [user_id, dateInput,  `${dateInput}%`], (err, results) => {
       if (err) {
           console.error('Error fetching transactions:', err);
           return res.status(500).json({ success: false, error: err.message });
@@ -479,7 +849,7 @@ const limiter = rateLimit({
 // Apply rate limiter to the ChatGPT endpoint
 app.use("/chat", limiter);
 app.post("/chat", async (req, res) => {
-  const { prompt, max_tokens, user_id = 1 } = req.body;
+  const { prompt, max_tokens, user_id  } = req.body;
 
   //console.log("Received request with prompt:", prompt);
 
@@ -490,7 +860,7 @@ app.post("/chat", async (req, res) => {
 
   try {
     const completion = await openai.completions.create({
-        model: " ",
+        model: "text-davinci-003",
         prompt: prompt,
         max_tokens: max_tokens || 1000
     });
@@ -507,14 +877,14 @@ app.post("/chat", async (req, res) => {
     // Save the query, response, model, and token usage to the database
     const queryText = prompt;
     const responseText = completion.choices[0].text.trim();
-    const modelName = "text-davinci-002";  // or you can dynamically get it from the completion response, if available
+    const modelName = "text-davinci-003";  // or you can dynamically get it from the completion response, if available
 
     const saveQuery = `
-        INSERT INTO chatgpt_queries (user_id, query, response, model, prompt_tokens, completion_tokens, total_tokens)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO chatgpt_queries (user_id, query, response, model, prompt_tokens, completion_tokens, total_tokens,api_endpoint)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
-    db.query(saveQuery, [user_id, queryText, responseText, modelName, prompt_tokens, completion_tokens, total_tokens], (err, result) => {
+    db.query(saveQuery, [user_id, queryText, responseText, modelName, prompt_tokens, completion_tokens, total_tokens,"/chat"], (err, result) => {
         if (err) {
             console.error('Error saving query-response:', err);
         } else {
@@ -546,56 +916,329 @@ app.post("/chat", async (req, res) => {
 });
 
 
+// Apply rate limiter to the ChatGPT endpoint
+app.use("/getClassifications", limiter);
+
+const delimiter = "####";
+const system_message = `
+Based on the content of the user's query, classify it into one of the following categories by providing the category's ID:
+1	Other
+2	Saving for emergency fund
+3	Saving for big purchase
+4	Other savings
+5	Investment
+6	Housing
+7	Groceries
+8	Utilities & Subscriptions
+9	Transportation
+10	Household Items
+11	Personal care
+12	Childcare
+13	Eating out by myself
+14	Pets
+15	Medical care
+16	Insurance
+17	Debt
+18	Clothing
+19	Saving for traveling
+20	Education
+21	Eating out to make friends
+22	Entertainment 
+23	Gifts/Donations
+
+`;
 
 
-app.post("/chatfree", async (req, res) => {
-    const { prompt } = req.body;
+// Apply rate limiter to the ChatGPT endpoint
+app.use("/getClassifications", limiter);
+app.post("/getClassifications", async (req, res) => {
+  const { prompt, max_tokens, user_id } = req.body;
 
-    try {
-        const response = await axios.post('http://localhost:5001/generate', { text: prompt });
-        const generatedText = response.data.generated_text;
-        res.send(generatedText);
-    } catch (error) {
-        console.error("Error generating completion:", error);
-        res.status(500).json({ error: "Error generating completion." });
-    }
-});
+  //console.log("Received request with prompt:", prompt);
 
-app.post('/getOpenAIResponse', async (req, res) => {
+  if (!prompt || typeof prompt !== "string" || prompt.trim() === "") {
+    //console.log("Invalid prompt provided.");
+    return res.status(400).json({ error: "Invalid prompt provided." });
+  }
+
   try {
-      const response = await fetch("https://api.openai.com/v2/completions", {
-          method: 'POST',
-          headers: {
-              'Authorization': 'Bearer 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',
-              'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(req.body),
-      });
+    const completion = await openai.completions.create({
+        model: "text-davinci-003",
+        prompt: `
+        Based on the content of the user's query, classify it into one of the following categories by providing the category's ID:
+        
+        "#","CATEGORY","DESCRIPTION"
+        "1","Other",""
+        "2","Saving for emergency fund","Emergency fund"
+        "3","Saving for big purchase","Big purchases like a new mattress or laptop"
+        "4","Other savings",""
+        "5","Investment","Financial planning\nInvesting"
+        "6","Housing","If you currently rent a house, apartment or a room, your housing costs may be limited to your monthly rent and renters insurance. if you own a home includes your mortgage payment, as well as property taxes, home repairs, homeowners association dues and more."
+        "7","Groceries","Food/Supplies - groceries"
+        "8","Utilities & Subscriptions","Utilities - Water, gas, electricity, mobile phone, internet, TV licence, council tax, Subscriptions (Netflix, Amazon, Hulu, etc.)"
+        "9","Transportation","Transportation - petrol, train tickets, bus fare, car maintenance, car loan payment, parking, Taxi/Uber"
+        "10","Household Items","cleaning supplies,Toiletries\nLaundry detergent\nDishwasher detergent\nCleaning supplies\nTools"
+        "11","Personal care","Gym memberships\nHaircuts\nSalon services\nCosmetics (like makeup or services like laser hair removal)"
+        "12","Childcare","nursery, babysitting, daycare, school trips/meals/uniform"
+        "13","Eating out by myself",""
+        "14","Pets","Pets - food, vet bills, treats, toys, flea/tick treatment"
+        "15","Medical care","Primary care\nDental care\nSpecialty care (dermatologists, orthodontics, optometrists, etc.)\nUrgent care\nMedications\nMedical devices"
+        "16","Insurance","Health insurance\nHomeowner’s or renter’s insurance\nHome warranty or protection plan\nAuto insurance\nLife insurance\nDisability insurance"
+        "17","Debt","Personal loans\nStudent loans\nCredit cards"
+        "18","Clothing","Adults’ clothing\nAdults’ shoes\nChildren’s clothing\nChildren’s shoes"
+        "19","Saving for traveling",""
+        "20","Education","Children’s college\nYour college\nSchool supplies\nBooks"
+        "21","Eating out to make friends","Eating at restaurants"
+        "22","Entertainment","Alcohol and/or bars\nGames\nMovies\nConcerts\nVacations"
+        "23","Gifts/Donations","Gifts - birthdays, anniversaries, holidays, special events"
+        
+        User Queary: `+prompt,
+        max_tokens: max_tokens || 1000
+    });
 
-      const data = await response.json();
-      res.json(data);
-  } catch (err) {
-      res.status(500).json({ error: 'Failed to fetch from OpenAI' });
+    //console.log("Completion response:", completion);
+
+    // Extracting token usages
+    const {
+        prompt_tokens, 
+        completion_tokens, 
+        total_tokens
+    } = completion.usage;
+
+    // Save the query, response, model, and token usage to the database
+    const queryText = prompt;
+    const responseText = completion.choices[0].text.trim();
+
+    const regex = /(\d+)/;
+    const matches = responseText.match(regex);
+    
+    let extractedInteger;
+    
+    if (matches) {
+        extractedInteger = parseInt(matches[1], 10);
+    } else {
+        extractedInteger = 1;
+    }
+    
+    console.log(responseText);  // This will log the integer or 1 if no integer is found
+    
+    const modelName = "text-davinci-003";  // or you can dynamically get it from the completion response, if available
+
+    const saveQuery = `
+        INSERT INTO chatgpt_queries (user_id, query, response, model, prompt_tokens, completion_tokens, total_tokens,api_endpoint)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    db.query(saveQuery, [user_id, queryText, responseText, modelName, prompt_tokens, completion_tokens, total_tokens,"/getClassifications"], (err, result) => {
+        if (err) {
+            console.error('Error saving query-response:', err);
+        } else {
+            //console.log('Query-response saved successfully!');
+        }
+    });
+
+    // res.send(responseText);
+    res.send(String(extractedInteger));
+
+
+  } catch (error) {
+    console.error("Error generating completion:", error);
+
+    if (error instanceof OpenAI.APIError) {
+      console.error("OpenAI API Error:", error);
+
+      res.status(500).json({
+        error: error.message,
+        code: error.code,
+        type: error.type,
+        status: error.status
+      });
+    } else {
+      console.error("Non-API error:", error);
+
+      res.status(500).json({ error: "Error generating completion." });
+    }
   }
 });
 
-// // Endpoint to save query and response
-// app.post('/save-query-response', (req, res) => {
-//   const { user_id, query, response, tokens_used } = req.body;
+async function getMatchedExpenseLogic(userId, expenseMonth, systemMessage) {
+  console.log("OPEN AI 1/10: getMatchedExpenseLogic STARTED");
+  
+  return new Promise((resolve, reject) => {
+      console.log("OPEN AI 2/10: Inside the promise for /getmatchedexpense", userId, expenseMonth, systemMessage);
 
-//   const saveQuery = `
-//     INSERT INTO chatgpt_queries (user_id, query, response, tokens_used)
-//     VALUES (?, ?, ?, ?)
-//   `;
+      if (!userId || !expenseMonth || !systemMessage) {
+          console.log("OPEN AI 3/10: Required fields missing");
+          return reject({ message: 'User ID, expenseMonth, and systemMessage are required.' });
+      }
 
-//   db.query(saveQuery, [user_id, query, response, tokens_used], (err, result) => {
-//     if (err) {
-//       console.error('Error saving query-response:', err);
-//       return res.json({ success: false, error: err.message });
-//     }
-//     res.json({ success: true, message: 'Query-response saved successfully!' });
-//   });
-// });
+      const fetchQuery = "SELECT id,expense_name FROM expenses WHERE user_id = ? AND expense_month like ?";
+      dbOld.query(fetchQuery, [userId, expenseMonth], async (err, expenses) => {
+          if (err) {
+              console.error("OPEN AI 4/10: Error fetching expenses:", err);
+              return reject({ message: err.message });
+          }
+
+          console.log("OPEN AI 5/10: Successfully fetched expenses");
+
+          const system_message = `
+Based on the content of the user's query, classify it into one of the following categories by providing the category's ID, if not found, reply 0 or not found:
+${expenses.map(expense => `${expense.id}: ${expense.expense_name}`).join('\n')}
+          `;
+
+          try {
+              console.log("OPEN AI 6/10: Requesting OpenAI's completion");
+              const completion = await openai.completions.create({
+                  model: "text-davinci-003",
+                  prompt: system_message + "\nUser Query: " + systemMessage,
+                  max_tokens: 100
+              });
+
+              console.log("OPEN AI 7/10: OpenAI completion received");
+
+              const responseText = completion.choices[0].text.trim();
+              const regex = /(\d+)/;
+              const matches = responseText.match(regex);
+
+              let extractedInteger = matches ? parseInt(matches[1], 10) : 0;
+
+              console.log(`OPEN AI 8/10: Extracted matched expense ID: ${extractedInteger}`);
+
+              // Start the database save in parallel.
+              saveToDatabase(userId, systemMessage, responseText, completion)
+                  .catch(err => console.error("Failed to save to database:", err));
+  
+              // Resolve immediately with the extracted ID.
+              resolve({ matchedExpenseId: extractedInteger });
+              
+          } catch (error) {
+              console.error("Error generating completion:", error);
+              return reject({ message: "Error generating completion." });
+          }
+      });
+  });
+}
+async function saveToDatabase(userId, systemMessage, responseText, completion) {
+  console.log("OPEN AI Query DB 1/3: Successfully received query-response");
+  const saveQuery = `
+INSERT INTO chatgpt_queries (user_id, query, response, model, prompt_tokens, completion_tokens, total_tokens, api_endpoint)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  return new Promise((resolve, reject) => {
+      db.query(saveQuery, [userId, systemMessage, responseText, "text-davinci-003", completion.usage.prompt_tokens, completion.usage.completion_tokens, completion.usage.total_tokens, "/getmatchedexpense"], (err, result) => {
+          if (err) {
+              console.error("OPEN AI Query DB 2/3: Error saving query-response:", err);
+              console.log("OPEN AI Query DB 2/3: Error saving query-response:", err);
+              reject({ message: err.message });
+          } else {
+              console.log("OPEN AI Query DB 3/3: Successfully saved query-response");
+              resolve();
+          }
+      });
+  });
+}
+
+
+app.use("/getmatchedexpense", limiter);
+
+app.post("/getmatchedexpense", async (req, res) => {
+    console.log('Received request for /getmatchedexpense',req);
+    
+    const user_id = req.body.user_id;
+    const expense_month = req.body.expense_month;
+    const prompt = req.body.prompt;
+
+    if (!user_id || !expense_month || !prompt) {
+        console.log('Required fields missing');
+        return res.status(400).json({ success: false, message: 'User ID, expense_month, and prompt are required.' });
+    }
+
+    // Fetch expenses for the user and month
+    const fetchQuery = "SELECT id,expense_name FROM expenses WHERE user_id = ? AND expense_month = ?";
+    dbOld.query(fetchQuery, [user_id, expense_month], async (err, expenses) => {
+        if (err) {
+            console.error('Error fetching expenses:', err);
+            return res.status(500).json({ success: false, error: err.message });
+        }
+
+        console.log(`Fetched ${expenses.length} expenses for user ${user_id} and month ${expense_month}`);
+
+        // Generate system message dynamically based on the fetched expenses
+        const system_message = `
+Based on the content of the user's query, classify it into one of the following categories by providing the category's ID, if not found, reply 0 or not found:
+${expenses.map(expense => `${expense.id}: ${expense.expense_name}`).join('\n')}
+        `;
+
+        try {
+            console.log('Generating OpenAI completion...');
+            const completion = await openai.completions.create({
+                model: "text-davinci-003",
+                prompt: system_message + "\nUser Query: " + prompt,
+                max_tokens: 100
+            });
+
+            console.log('Received completion from OpenAI');
+
+            const {
+                prompt_tokens, 
+                completion_tokens, 
+                total_tokens
+            } = completion.usage;
+
+            const responseText = completion.choices[0].text.trim();
+            const regex = /(\d+)/;
+            const matches = responseText.match(regex);
+
+            let extractedInteger;
+
+            if (matches) {
+                extractedInteger = parseInt(matches[1], 10);
+            } else {
+                extractedInteger = 0; // Default value
+            }
+
+            console.log(`Extracted expense_id: ${extractedInteger}`);
+
+            const modelName = "text-davinci-003"; 
+            const apiEndpoint = "/getmatchedexpense";
+            
+            const saveQuery = `
+                INSERT INTO chatgpt_queries (user_id, query, response, model, prompt_tokens, completion_tokens, total_tokens, api_endpoint)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+    
+            db.query(saveQuery, [user_id, prompt, responseText, modelName, prompt_tokens, completion_tokens, total_tokens, apiEndpoint], (err, result) => {
+                if (err) {
+                    console.error('Error saving query-response:', err);
+                    return res.status(500).json({ success: false, error: err.message });
+                } else {
+                    console.log('Query-response saved successfully!');
+                    console.log('getMatchedExpenseLogic FINISHED');
+                    return extractedInteger;
+
+                }
+            });
+        } catch (error) {
+            console.error("Error generating completion:", error);
+    
+            if (error instanceof OpenAI.APIError) {
+                console.error("OpenAI API Error:", error);
+    
+                return res.status(500).json({
+                    error: error.message,
+                    code: error.code,
+                    type: error.type,
+                    status: error.status
+                });
+            } else {
+                console.error("Non-API error:", error);
+                return res.status(500).json({ error: "Error generating completion." });
+            }
+        }
+    });
+});
+
 
 app.delete('/delete-expense', (req, res) => {
   // Extracting the required fields from the request body
