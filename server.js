@@ -941,18 +941,27 @@ if (coach === "coach1") {
 
 
 console.log("Nushi: Determined AI Coach Personality:", aiCoachPersonality); // 4. AI Coach Personality
-const expensesList = expenses.map(e => `$${e.expense_amount} for ${e.expense_name} (${e.expense_type} - ${e.category_name})`).join(", ");
-const transactionsList = transactions.map(t => `$${t.transaction_amount} for ${t.transaction_name} (Matched with ${t.matched_expense_name})`).join(", ");
+const expensesList = expenses.map(e => `${e.expense_amount} for ${e.expense_name} (${e.expense_type} - ${e.category_name})`).join(", ");
+const transactionsList = transactions.map(t => `${t.transaction_amount} for ${t.transaction_name} (Matched with ${t.matched_expense_name})`).join(", ");
 const detailedPrompt = `
 My Name (try to extract name from username):${name}
 Language: ${language}
-Currency: ${currency}
+My Currency: ${currency}
 Monthly Income: $${monthly_income}
 Monthly Expenses: ${expensesList}
 Recent Transactions: ${transactionsList}
+Capital AI: At Capital App, our mission is to empower you to elevate your net worth, step by step.
 
-Given my financial details and my question, reply as an AI financial coach working at Capital AI(founded by Amir and Mario) www.capitalai.info , Your Name: Nushi with the chosen personality ${aiCoachPersonality}. Limit to a popup answer text for mobile phone bottom part, like duolingo.  Be specific when talking about my expenses or transactions, like "i see you bought X and Y for Z so ... My quesion: ${prompt}
-      `;
+As we continuously strive for excellence, note that this is an early version of our platform. We're dedicated to bringing you enhanced solutions every time.
+
+Reach out for any comments or queries:
+
+Email: Mariosalazarc27@gmail.com
+WeChat: mariosalazarc
+WhatsApp: +8618458334427,
+Given my financial details and my question, reply as an AI financial coach working at Capital AI(founded by Amir and Mario) www.capitalai.info , Your Name: Nushi with the chosen personality ${aiCoachPersonality}. Limit to a popup answer text for mobile phone bottom part 500char, like duolingo.  Be specific when talking about my expenses or transactions, like "i see you bought X and Y for Z so ... My quesion: ${prompt}
+ lIMIT YOUR ANSWER TO 50 WORDS
+`;
 
   //console.log("Received request with prompt:", prompt);
 
