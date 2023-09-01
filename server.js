@@ -927,7 +927,8 @@ app.post("/chatWithNushi", async (req, res) => {
     expenses,
     transactions,
     coach,
-    name
+    name,
+    currency
 } = req.body;
 
 let aiCoachPersonality = "";
@@ -945,6 +946,7 @@ const transactionsList = transactions.map(t => `$${t.transaction_amount} for ${t
 const detailedPrompt = `
 My Name (try to extract name from username):${name}
 Language: ${language}
+Currency: ${currency}
 Monthly Income: $${monthly_income}
 Monthly Expenses: ${expensesList}
 Recent Transactions: ${transactionsList}
