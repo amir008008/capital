@@ -1,7 +1,7 @@
 const OpenAI = require('openai');
 //console.log("OPENAI_API_KEY:", process.env.OPENAI_API_KEY);
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY});
 openai.api_key = process.env.OPENAI_API_KEY;
 // const { Configuration, OpenAIApi } = require("openai");
 
@@ -916,6 +916,108 @@ const limiter = rateLimit({
 });
 
 // Apply rate limiter to the ChatGPT endpoint
+app.use("/chatWithNushi", limiter);
+app.post("/chatWithNushi", async (req, res) => {
+  const {
+    prompt,
+    max_tokens,
+    user_id,
+    language,
+    monthly_income,
+    expenses,
+    transactions,
+    coach,
+    name
+} = req.body;
+
+let aiCoachPersonality = "";
+
+if (coach === "coach1") {
+    aiCoachPersonality = "Stronger Personality – (ENTJ Myers 'Analytical')";
+} else if (coach === "coach2") {
+    aiCoachPersonality = "Softer Personality - (ISFP Myers 'Supportive')";
+}
+
+
+console.log("Nushi: Determined AI Coach Personality:", aiCoachPersonality); // 4. AI Coach Personality
+const expensesList = expenses.map(e => `$${e.expense_amount} for ${e.expense_name} (${e.expense_type} - ${e.category_name})`).join(", ");
+const transactionsList = transactions.map(t => `$${t.transaction_amount} for ${t.transaction_name} (Matched with ${t.matched_expense_name})`).join(", ");
+const detailedPrompt = `
+My Name (try to extract name from username):${name}
+Language: ${language}
+Monthly Income: $${monthly_income}
+Monthly Expenses: ${expensesList}
+Recent Transactions: ${transactionsList}
+
+Given my financial details and my question, reply as an AI financial coach working at Capital AI(founded by Amir and Mario) www.capitalai.info , Your Name: Nushi with the chosen personality ${aiCoachPersonality}. Limit to a popup answer text for mobile phone bottom part, like duolingo.  Be specific when talking about my expenses or transactions, like "i see you bought X and Y for Z so ... My quesion: ${prompt}
+      `;
+
+  //console.log("Received request with prompt:", prompt);
+
+  if (!prompt || typeof prompt !== "string" || prompt.trim() === "") {
+    //console.log("Invalid prompt provided.");
+    return res.status(400).json({ error: "Invalid prompt provided." });
+  }
+
+  try {
+    const completion = await openai.completions.create({
+        model: "text-davinci-003",
+        prompt: detailedPrompt,
+        max_tokens: max_tokens || 1000
+    });
+
+    //console.log("Completion response:", completion);
+
+    // Extracting token usages
+    const {
+        prompt_tokens, 
+        completion_tokens, 
+        total_tokens
+    } = completion.usage;
+
+    // Save the query, response, model, and token usage to the database
+    const queryText = prompt;
+    const responseText = completion.choices[0].text.trim();
+    const modelName = "text-davinci-003";  // or you can dynamically get it from the completion response, if available
+
+    const saveQuery = `
+        INSERT INTO chatgpt_queries (user_id, query, response, model, prompt_tokens, completion_tokens, total_tokens,api_endpoint)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    db.query(saveQuery, [user_id, queryText, responseText, modelName, prompt_tokens, completion_tokens, total_tokens,"/chatWithNushi"], (err, result) => {
+        if (err) {
+            console.error('Error saving query-response:', err);
+        } else {
+            //console.log('Query-response saved successfully!');
+        }
+    });
+
+    res.send(responseText);
+
+
+  } catch (error) {
+    console.error("Error generating completion:", error);
+
+    if (error instanceof OpenAI.APIError) {
+      console.error("OpenAI API Error:", error);
+
+      res.status(500).json({
+        error: error.message,
+        code: error.code,
+        type: error.type,
+        status: error.status
+      });
+    } else {
+      console.error("Non-API error:", error);
+
+      res.status(500).json({ error: "Error generating completion." });
+    }
+  }
+});
+
+
+// Apply rate limiter to the ChatGPT endpoint
 app.use("/chat", limiter);
 app.post("/chat", async (req, res) => {
   const { prompt, max_tokens, user_id  } = req.body;
@@ -986,92 +1088,17 @@ app.post("/chat", async (req, res) => {
 
 // Apply rate limiter to the ChatGPT endpoint
 // Apply rate limiter to the ChatGPT endpoint
-// app.use("/chatWithCoach", limiter);
-
-// app.post("/chatWithCoach", async (req, res) => {
-//   const { prompt, max_tokens, user_id } = req.body;
-
-//   // Fetch the user's preferred AI coach from the database
-//   const fetchCoachPreference = 'SELECT ai_coach FROM user_preferences WHERE user_id = ?';
-//   let aiCoachPersonality = "";
-  
-//   db.query(fetchCoachPreference, [user_id], (err, result) => {
-//     if (err) {
-//       console.error('Error fetching AI coach preference:', err);
-//       return res.status(500).json({ error: "Error fetching AI coach preference." });
-//     }
-
-//     // Set the coach's personality based on the user's preference
-//     if (result && result[0] && result[0].ai_coach) {
-//       if (result[0].ai_coach === "coach1") {
-//         aiCoachPersonality = "Stronger Personality – (ENTJ Myers 'Analytical')";
-//       } else if (result[0].ai_coach === "coach2") {
-//         aiCoachPersonality = "Softer Personality - (ISFP Myers 'Supportive')";
-//       }
-//     }
-
-//     // Construct the prompt with the AI coach's personality
-//     const modifiedPrompt = `${aiCoachPersonality}: ${prompt} reply as a AI financial coach with personality.`;
-
-//     // Rest of your endpoint logic...
-
-//     try {
-//       const completion = await openai.completions.create({
-//         model: "text-davinci-003",
-//         prompt: modifiedPrompt,
-//         max_tokens: max_tokens || 1000
-//       });
-
-//     //console.log("Completion response:", completion);
-
-//     // Extracting token usages
-//     const {
-//         prompt_tokens, 
-//         completion_tokens, 
-//         total_tokens
-//     } = completion.usage;
-
-//     // Save the query, response, model, and token usage to the database
-//     const queryText = prompt;
-//     const responseText = completion.choices[0].text.trim();
-//     const modelName = "text-davinci-003";  // or you can dynamically get it from the completion response, if available
-
-//     const saveQuery = `
-//         INSERT INTO chatgpt_queries (user_id, query, response, model, prompt_tokens, completion_tokens, total_tokens,api_endpoint)
-//         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-//     `;
-
-//     db.query(saveQuery, [user_id, queryText, responseText, modelName, prompt_tokens, completion_tokens, total_tokens,"/chat"], (err, result) => {
-//         if (err) {
-//             console.error('Error saving query-response:', err);
-//         } else {
-//             //console.log('Query-response saved successfully!');
-//         }
-//     });
-
-//     res.send(responseText);
-
-
-//   } catch (error) {
-//     console.error("Error generating completion:", error);
-
-//     if (error instanceof OpenAI.APIError) {
-//       console.error("OpenAI API Error:", error);
-
-//       res.status(500).json({
-//         error: error.message,
-//         code: error.code,
-//         type: error.type,
-//         status: error.status
-//       });
-//     } else {
-//       console.error("Non-API error:", error);
-
-//       res.status(500).json({ error: "Error generating completion." });
-//     }
-//   }
-// });
-
+const queryPromise = (queryString, values) => {
+    return new Promise((resolve, reject) => {
+        db.query(queryString, values, (err, result) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(result);
+            }
+        });
+    });
+};
 
 
 // Apply rate limiter to the ChatGPT endpoint
