@@ -1749,8 +1749,8 @@ app.post('/api/register', async (req, res) => {
     await connection.query(userQuery, [userId, username, email, hashedPassword]);
 
     // Default Preferences
-    const preferencesQuery = 'INSERT INTO user_preferences (user_id, language, locale, currency, dateFormat, moneyFormat) VALUES (?, ?, ?, ?, ?, ?)';
-    await connection.query(preferencesQuery, [userId, 'zh', 'en-US', 'CNY', 'MM-DD-YYYY', '1,234.56']);
+    const preferencesQuery = 'INSERT INTO user_preferences (user_id, language, locale, currency, dateFormat, moneyFormat,ai_coach) VALUES (?, ?, ?, ?, ?, ?, ?)';
+    await connection.query(preferencesQuery, [userId, 'en', 'en-US', 'CNY', 'MM-DD-YYYY', '1,234.56','coach1']);
 
     // Budget statuses
     const currentDate = new Date();
