@@ -469,23 +469,67 @@ async function searchExpense(data) {
     });
 }
 
+// async function updateExpense(expense, data) {
+//     console.log("5/15: Updating expense...");
+//     const { expenseAmount } = data;
+//     const newUsedAlready = (parseFloat(expense.used_already) || 0) + parseFloat(expenseAmount);
+//     const updateQuery = 'UPDATE expenses SET used_already = ? WHERE id = ?';
+//     return new Promise((resolve, reject) => {
+//         dbOld.query(updateQuery, [newUsedAlready, expense.id], (err) => {
+//             if (err) {
+//                 console.error("6/15: Error updating expense.", err);
+//                 reject(err);
+//             } else {
+//                 console.log("6/15: Expense update successful!");
+//                 resolve();
+//             }
+//         });
+//     });
+// }
+
 async function updateExpense(expense, data) {
-    console.log("5/15: Updating expense...");
-    const { expenseAmount } = data;
-    const newUsedAlready = (parseFloat(expense.used_already) || 0) + parseFloat(expenseAmount);
-    const updateQuery = 'UPDATE expenses SET used_already = ? WHERE id = ?';
-    return new Promise((resolve, reject) => {
-        dbOld.query(updateQuery, [newUsedAlready, expense.id], (err) => {
-            if (err) {
-                console.error("6/15: Error updating expense.", err);
-                reject(err);
-            } else {
-                console.log("6/15: Expense update successful!");
-                resolve();
-            }
-        });
-    });
+  console.log("5/15: Updating expense...");
+  const { expenseAmount } = data;
+  const newUsedAlready = (parseFloat(expense.used_already) || 0) + parseFloat(expenseAmount);
+  const updateQuery = 'UPDATE expenses SET used_already = ? WHERE id = ?';
+  
+  return new Promise((resolve, reject) => {
+      dbOld.query(updateQuery, [newUsedAlready, expense.id], (err) => {
+          if (err) {
+              console.error("6/15: Error updating expense.", err);
+              reject(err);
+          } else {
+              console.log("6/15: Expense update successful!");
+              
+              // Fetch the expense_name for the given ID from expenses table
+              const fetchExpenseNameQuery = 'SELECT expense_name FROM expenses WHERE id = ?';
+              dbOld.query(fetchExpenseNameQuery, [expense.id], (err, results) => {
+                  if (err) {
+                      console.error('Error fetching expense name:', err);
+                      reject(err);
+                  } else {
+                      console.log('Fetching expense name: ',results[0].expense_name);
+                      const expenseName = results[0].expense_name;
+
+                      // Update the matched_expense_name in transactions table based on fetched expense_name
+                      // Assuming transactionId corresponds to expense.id for simplicity. Adjust as needed!
+                      const updateTransactionQuery = 'UPDATE transactions SET matched_expense_name = ?, status = "alive" WHERE id = ?';
+                      dbOld.query(updateTransactionQuery, [expenseName, expense.id], (err) => {  // Adjust transaction ID if needed
+                          if (err) {
+                              console.error('Error updating transaction:', err);
+                              reject(err);
+                          } else {
+                              console.log(`Updated transaction with ID: ${expense.id} to match "${expenseName}" expense and set status to "alive".`);
+                              resolve();
+                          }
+                      });
+                  }
+              });
+          }
+      });
+  });
 }
+
 
 async function updateExpenseById(matchedExpenseId, data,transactionId) {
   console.log("7/15: Updating expense by ID...", matchedExpenseId);
