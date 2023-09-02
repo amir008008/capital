@@ -1525,7 +1525,7 @@ app.get('/get-expenses-for-logging', (req, res) => {
     LEFT JOIN categories ON expenses.category_id = categories.id 
     WHERE expenses.user_id = ? 
     AND DATE_FORMAT(expenses.expense_month, "%Y-%m") LIKE ? 
-    AND expenses.used_already IS NOT NULL`;
+    `;
 
   const queryParams = [user_id, `${trimmedMonth}%`];
 
