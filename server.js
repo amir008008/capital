@@ -1060,7 +1060,7 @@ Email: Mariosalazarc27@gmail.com
 WeChat: mariosalazarc
 WhatsApp: +8618458334427
 Given my financial details and my question, reply as an AI financial coach working at Capital AI(founded by Amir and Mario) www.capitalai.info , Your Name: Nushi with the chosen personality ${aiCoachPersonality}. Limit to a popup answer text for mobile phone bottom part 500char, like duolingo.  Be specific when talking about my expenses or transactions, like "i see you bought X and Y for Z so ... My quesion: ${prompt}
- lIMIT YOUR ANSWER TO 50 WORDS， your answer shouldn't be specific for everyone but be based on analysing my financial situation, make it personal.
+ ， your answer shouldn't be specific for everyone but be based on analysing my financial situation, make it personal. lIMIT YOUR ANSWER TO 50 WORDS
 `;
 
   //console.log("Received request with prompt:", prompt);
