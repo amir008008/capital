@@ -487,7 +487,7 @@ async function searchExpense(data) {
 //     });
 // }
 
-async function updateExpense(expense, data) {
+async function updateExpense(transactionId,expense, data) {
   console.log("5/15: Updating expense...");
   const { expenseAmount } = data;
   const newUsedAlready = (parseFloat(expense.used_already) || 0) + parseFloat(expenseAmount);
@@ -514,12 +514,12 @@ async function updateExpense(expense, data) {
                       // Update the matched_expense_name in transactions table based on fetched expense_name
                       // Assuming transactionId corresponds to expense.id for simplicity. Adjust as needed!
                       const updateTransactionQuery = 'UPDATE transactions SET matched_expense_name = ?, status = "alive" WHERE id = ?';
-                      dbOld.query(updateTransactionQuery, [expenseName, expense.id], (err) => {  // Adjust transaction ID if needed
+                      dbOld.query(updateTransactionQuery, [expenseName, transactionId], (err) => {  // Adjust transaction ID if needed
                           if (err) {
                               console.error('Error updating transaction:', err);
                               reject(err);
                           } else {
-                              console.log(`Updated transaction with ID: ${expense.id} to match "${expenseName}" expense and set status to "alive".`);
+                              console.log(`Updated transaction with ID: ${transactionId} to match "${expenseName}" expense and set status to "alive".`);
                               resolve();
                           }
                       });
@@ -587,7 +587,7 @@ app.post('/add-log', async (req, res) => {
       const expenses = await searchExpense(req.body);
       if (expenses.length) {
           console.log("10/15: Expense found! Going to update it...");
-          await updateExpense(expenses[0], req.body);
+          await updateExpense(transactionId,expenses[0], req.body);
       } else {
           console.log("11/15: Expense not found. Trying matched expense logic...");
 
