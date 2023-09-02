@@ -279,6 +279,61 @@ app.put('/update-transaction', (req, res) => {
   });
 });
 
+app.put('/change-transaction-category', (req, res) => {
+  const { transaction_id, oldCategory, newCategory } = req.body;
+
+  if (!transaction_id || !oldCategory || !newCategory) {
+      return res.status(400).json({ success: false, message: 'Transaction ID, old category, and new category are required.' });
+  }
+
+  // First, get the transaction details
+  const getTransactionQuery = 'SELECT * FROM transactions WHERE id = ?';
+  dbOld.query(getTransactionQuery, [transaction_id], (err, transactionResults) => {
+      if (err) {
+          console.error('Error fetching transaction details:', err);
+          return res.status(500).json({ success: false, error: err.message });
+      }
+
+      const transaction = transactionResults[0];
+      const transactionAmount = parseFloat(transaction.transaction_amount);
+      const expenseMonth = transaction.transaction_date instanceof Date 
+    ? `${transaction.transaction_date.getFullYear()}-${String(transaction.transaction_date.getMonth() + 1).padStart(2, '0')}`
+    : transaction.transaction_date.slice(0, 7);
+
+
+      // Decrement the used_already for the old category
+      const decrementOldCategoryQuery = 'UPDATE expenses SET used_already = used_already - ? WHERE user_id = ? AND expense_name = ? AND expense_month LIKE ?';
+      dbOld.query(decrementOldCategoryQuery, [transactionAmount, transaction.user_id, oldCategory, `${expenseMonth}%`], (err) => {
+          if (err) {
+              console.error('Error decrementing used_already for old category:', err);
+              return res.json({ success: false, error: err.message });
+          }
+
+          // Increment the used_already for the new category
+          const incrementNewCategoryQuery = 'UPDATE expenses SET used_already = used_already + ? WHERE user_id = ? AND expense_name = ? AND expense_month LIKE ?';
+          dbOld.query(incrementNewCategoryQuery, [transactionAmount, transaction.user_id, newCategory, `${expenseMonth}%`], (err) => {
+              if (err) {
+                  console.error('Error incrementing used_already for new category:', err);
+                  return res.json({ success: false, error: err.message });
+              }
+
+              // Update the matched_expense_name in the transactions table
+              const updateTransactionCategoryQuery = 'UPDATE transactions SET matched_expense_name = ? WHERE id = ?';
+              dbOld.query(updateTransactionCategoryQuery, [newCategory, transaction_id], (err) => {
+                  if (err) {
+                      console.error('Error updating transaction category:', err);
+                      return res.json({ success: false, error: err.message });
+                  }
+
+                  return res.json({
+                      success: true,
+                      message: 'Transaction category updated and corresponding expenses adjusted successfully.'
+                  });
+              });
+          });
+      });
+  });
+});
 
 
 app.post('/add-log-old', (req, res) => {
@@ -958,7 +1013,7 @@ Reach out for any comments or queries:
 
 Email: Mariosalazarc27@gmail.com
 WeChat: mariosalazarc
-WhatsApp: +8618458334427,
+WhatsApp: +8618458334427
 Given my financial details and my question, reply as an AI financial coach working at Capital AI(founded by Amir and Mario) www.capitalai.info , Your Name: Nushi with the chosen personality ${aiCoachPersonality}. Limit to a popup answer text for mobile phone bottom part 500char, like duolingo.  Be specific when talking about my expenses or transactions, like "i see you bought X and Y for Z so ... My quesion: ${prompt}
  lIMIT YOUR ANSWER TO 50 WORDS
 `;
