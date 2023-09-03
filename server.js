@@ -1,19 +1,13 @@
- const OpenAI = require('openai');
-// //console.log("OPENAI_API_KEY:", process.env.OPENAI_API_KEY);
+const OpenAI = require('openai');
+//console.log("OPENAI_API_KEY:", process.env.OPENAI_API_KEY);
 
-// const openai = new OpenAI({ apiKey: "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"});
-// openai.api_key = "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";
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY});
+openai.api_key = process.env.OPENAI_API_KEY;
 // const { Configuration, OpenAIApi } = require("openai");
 
 // const configuration = new Configuration({
 //   apiKey: "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",
 // });
-
-//Chatgpt 3.5 Stuff
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
-//const response = await openai.listEngines();
 
 // const openai = new OpenAIApi(configuration);  // You can initialize this once and reuse
 const axios = require('axios');
@@ -1140,121 +1134,6 @@ The idea behind this model is to encourage continuous learning, ensure adequate 
     } else {
       console.error("Non-API error:", error);
 
-      res.status(500).json({ error: "Error generating completion." });
-    }
-  }
-});
-
-// Apply rate limiter to the ChatGPT endpoint
-app.use("/chatWithNushi3.5", limiter);
-app.post("/chatWithNushi3.5", async (req, res) => {
-  const {
-    prompt,
-    max_tokens,
-    user_id,
-    language,
-    monthly_income,
-    expenses,
-    transactions,
-    coach,
-    name,
-    currency
-  } = req.body;
-
-  let aiCoachPersonality = "";
-
-  if (coach === "coach1") {
-    aiCoachPersonality = "Stronger Personality – (ENTJ Myers 'Analytical')";
-  } else if (coach === "coach2") {
-    aiCoachPersonality = "Softer Personality - (ISFP Myers 'Supportive')";
-  }
-
-  const expensesList = expenses.map(e => `${e.expense_amount} for ${e.expense_name} (${e.expense_type} - ${e.category_name})`).join(", ");
-  const transactionsList = transactions.map(t => `${t.transaction_amount} for ${t.transaction_name} (Matched with ${t.matched_expense_name})`).join(", ");
-
-const detailedPrompt = `
-<MyInfo>
-Name (try to extract name from username):${name}
-Language:${language}
-Currency:${currency}
-Monthly Income:$${monthly_income}
-Monthly Expenses:${expensesList}
-Recent Transactions:${transactionsList}
-</MyInfo>
-<LiKa-shingAdvice>
-Here's a rough breakdown of Li Ka-shing's advice on how to manage your finances:
-
-  30% - Living Expenses: Embrace a simple lifestyle with basic meals; remember, your youth offers resilience.
-
-  20% - Building Relationships: Minimize phone bills but invest in dining out with influential and inspiring individuals twice a month.
-
-  15% - Continuous Learning: Monthly book purchases are a must; dive deep into their teachings, then teach others. Save for impactful training courses.
-
-  10% - Travel Experiences: Explore the world annually; it's essential for personal growth and understanding.
-
-  25% - Savings & Investments: Consistently save for potential business ventures; small businesses offer growth with managed risks.
-</LiKa-shingAdvice>
-<CapitalAIMission>
-At Capital App, our mission is to empower you to elevate your net worth, step by step. As we continuously strive for excellence, this is an early version of our platform. We're dedicated to bringing you enhanced solutions every time. You are "Nushi", an AI financial coach at Capital AI (founded by Amir and Mario). Imitate Li ka-shing's financial wisdom. Be specific about my expenses or transactions, and limit your answer to 50 words.
-</CapitalAIMission>
-<ContactUs>
-Reach out for any comments or queries:
-
-Email: Mariosalazarc27@gmail.com
-WeChat: mariosalazarc
-WhatsApp: +8618458334427
-</ContactUs>
-
-<MyQuestion>
-${prompt}
-</MyQuestion>
-  `;
-
-  if (!prompt || typeof prompt !== "string" || prompt.trim() === "") {
-    return res.status(400).json({ error: "Invalid prompt provided." });
-  }
-
-  try {
-    const chatCompletion = await openai.chat.completions.create({
-      messages: [
-        { "role": "system", "content": `Adopt the persona of "Nushi", the AI financial coach at Capital AI with a ${aiCoachPersonality} personality. Provide specific feedback based on the user's financial details, referencing their transactions and expenses. Ensure your answer is suited for a mobile popup and under 500 characters.` },
-        { "role": "user", "content": detailedPrompt }
-      ],
-      model: "gpt-3.5-turbo",
-      max_tokens: max_tokens || 1000
-    });
-
-    // Extracting token usages
-    const responseText = chatCompletion.choices[0].message.content.trim();
-    const { prompt_tokens, completion_tokens, total_tokens } = chatCompletion.usage;
-    const modelName = "gpt-3.5-turbo";
-
-    const saveQuery = `
-        INSERT INTO chatgpt_queries (user_id, query, response, model, prompt_tokens, completion_tokens, total_tokens,api_endpoint)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    db.query(saveQuery, [user_id, prompt, responseText, modelName, prompt_tokens, completion_tokens, total_tokens, "/chatWithNushi3.5"], (err, result) => {
-      if (err) {
-        console.error('Error saving query-response:', err);
-      }
-    });
-
-    res.send(responseText);
-
-  } catch (error) {
-    console.error("Error generating completion:", error);
-
-    if (error instanceof OpenAI.APIError) {
-      console.error("OpenAI API Error:", error);
-      res.status(500).json({
-        error: error.message,
-        code: error.code,
-        type: error.type,
-        status: error.status
-      });
-    } else {
-      console.error("Non-API error:", error);
       res.status(500).json({ error: "Error generating completion." });
     }
   }
