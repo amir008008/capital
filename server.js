@@ -1539,7 +1539,7 @@ ${expenses.map(expense => `${expense.id}: ${expense.expense_name}, at the end, m
 
               console.log("OPEN AI 7/10: OpenAI completion received");
               console.log(completion.choices[0].message.content);
-              let content = completion.choices[0].message.content); // Example content
+              let content = completion.choices[0].message.content; // Example content
 
               // Splitting the content based on periods, exclamations, and questions to consider different types of sentence end markers.
               let sentences = content.split(/(?<=[.!?])\s*/);
