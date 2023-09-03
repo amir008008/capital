@@ -584,6 +584,7 @@ async function updateExpenseById(matchedExpenseId, data,transactionId) {
 
 app.post('/add-log', async (req, res) => {
   console.log("9/15: Received POST request for smart-add-log...", req.body);
+  let advice = '';  // <---- Define the advice variable here, outside of the Promise.race block
   const system_message = `
       Please classify the following expense based on its details:
       User Query: ${req.body.expenseName}
@@ -599,11 +600,13 @@ app.post('/add-log', async (req, res) => {
 
           const result = await Promise.race([
             getMatchedExpenseLogic(req.body.user_id, req.body.expenseMonth, system_message)
-            .then(matchedExpenseId => {
+            .then(response => {
+              const { matchedExpenseId, advice: localAdvice } = response;
+              advice = localAdvice; // <---- Set the higher-scoped advice variable here
                 if (matchedExpenseId === '0') {
-                    return { status: "not-resolved", matchedExpenseId }; 
+                    return { status: "not-resolved", matchedExpenseId,advice }; 
                 } else {
-                    return { status: "resolved", matchedExpenseId };
+                    return { status: "resolved", matchedExpenseId,advice};
                 }
             }),
             new Promise(resolve => setTimeout(() => resolve({ status: "pending" }), 3000)) // 3 seconds timeout
@@ -628,7 +631,7 @@ app.post('/add-log', async (req, res) => {
         
       }
       console.log("14/15: All processes successful! Sending success response...");
-      res.json({ success: true, message: 'Processed successfully' });
+      res.json({ success: true, message: 'Processed successfully',advice: advice });
   } catch (error) {
       console.error("15/15: Error processing request:", error.message);
       res.json({ success: false, error: error.message });
@@ -1512,20 +1515,42 @@ async function getMatchedExpenseLogic(userId, expenseMonth, systemMessage) {
 
           const system_message = `
 Based on the content of the user's query, classify it into one of the following categories by providing the category's ID, if not found, reply 0 or not found:
-${expenses.map(expense => `${expense.id}: ${expense.expense_name}`).join('\n')}
+${expenses.map(expense => `${expense.id}: ${expense.expense_name}, at the end, make a 1 sentence maximum on what you think about this transaction from a financial advisor standpoint. `).join('\n')}
           `;
 
           try {
               console.log("OPEN AI 6/10: Requesting OpenAI's completion");
-              const completion = await openai.completions.create({
-                  model: "text-davinci-003",
-                  prompt: system_message + "\nUser Query: " + systemMessage,
-                  max_tokens: 100
+              // const completion = await openai.completions.create({
+              //     model: "text-davinci-003",
+              //     prompt: system_message + "\nUser Query: " + systemMessage,
+              //     max_tokens: 100
+              // });
+
+              const completion = await openai.chat.completions.create({
+                messages: [
+                  { "role": "system", "content": `Based on the content of the user's query, classify it into one of the following categories by providing the category's ID, if not found, reply 0 or not found:
+                  , at the end, make a 1 sentence maximum 7 words on what you think about this transaction from a financial advisor standpoint.` },
+                  { "role": "user", "content": system_message + "\nUser Query: " + systemMessage }
+                ],
+                model: "gpt-3.5-turbo",
+                max_tokens: 1000
               });
 
-              console.log("OPEN AI 7/10: OpenAI completion received");
 
-              const responseText = completion.choices[0].text.trim();
+              console.log("OPEN AI 7/10: OpenAI completion received");
+              console.log(completion.choices[0].message.content);
+              let content = "console.log(completion.choices[0].message.content);"; // Example content
+
+              // Splitting the content based on periods, exclamations, and questions to consider different types of sentence end markers.
+              let sentences = content.split(/(?<=[.!?])\s*/);
+
+              // Getting the last non-empty sentence
+              let advice = sentences.reverse().find(sentence => sentence.trim() !== "") || "";
+
+              console.log(advice);
+
+
+              const responseText = completion.choices[0].message.content.trim();
               const regex = /(\d+)/;
               const matches = responseText.match(regex);
 
@@ -1537,8 +1562,10 @@ ${expenses.map(expense => `${expense.id}: ${expense.expense_name}`).join('\n')}
               saveToDatabase(userId, systemMessage, responseText, completion)
                   .catch(err => console.error("Failed to save to database:", err));
   
-              // Resolve immediately with the extracted ID.
-              resolve({ matchedExpenseId: extractedInteger });
+                resolve({
+                    matchedExpenseId: extractedInteger,
+                    advice: advice
+                });
               
           } catch (error) {
               console.error("Error generating completion:", error);
@@ -1555,7 +1582,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   return new Promise((resolve, reject) => {
-      db.query(saveQuery, [userId, systemMessage, responseText, "text-davinci-003", completion.usage.prompt_tokens, completion.usage.completion_tokens, completion.usage.total_tokens, "/getmatchedexpense"], (err, result) => {
+      db.query(saveQuery, [userId, systemMessage, responseText, "gpt-3.5-turbo", completion.usage.prompt_tokens, completion.usage.completion_tokens, completion.usage.total_tokens, "/getmatchedexpense"], (err, result) => {
           if (err) {
               console.error("OPEN AI Query DB 2/3: Error saving query-response:", err);
               console.log("OPEN AI Query DB 2/3: Error saving query-response:", err);
