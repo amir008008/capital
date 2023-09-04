@@ -26,46 +26,57 @@ const { createPool } = require('mysql2/promise');
 const mysql = require('mysql2'); // <-- Update here
 
 const app = express();
-//  app.use(cors());
+
 app.use(bodyParser.json());
 // Allow specific origin
-app.use(cors({
-  origin: 'http://app.capitalai.info'
-}));
 
 
-const dbConfig = {
-    host: 'mysql',
-    user: 'userSQU',
-    password: '8n0HEUsN8QRpjisv',
-    database: 'sampledb',
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-};
-// const dbConfig = {
-//     host: 'localhost',
-//     user: 'newuser1',
-//     password: 'test123',
-//     database: 'budget_tracker',
-//     waitForConnections: true,
-//     connectionLimit: 10,
-//     queueLimit: 0
-// };
+const environment = 'prod';  // NODE_ENV will be either 'prod' or 'dev'
+console.log("Starting: ",environment);  // NODE_ENV will be either 'prod' or 'dev'
 
-const db = createPool(dbConfig); // Using createPool from promise version of mysql2
-const dbConfigOld = {
-  host: process.env.DB_HOST || 'mysql',
-  user: process.env.DB_USER || 'userSQU',
-  password: process.env.DB_PASSWORD || '8n0HEUsN8QRpjisv',
-  database: process.env.DB_NAME || 'sampledb',
-};
-// const dbConfigOld = {
-//   host: 'localhost',
-//   user: 'newuser1',
-//   password: 'test123',
-//   database: 'budget_tracker',
-// };
+let dbConfig;
+let dbConfigOld;
+
+if (environment === 'prod') {
+    dbConfig = {
+        host: 'mysql',
+        user: 'userSQU',
+        password: '8n0HEUsN8QRpjisv',
+        database: 'sampledb',
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0
+    };
+    dbConfigOld = {
+        host: process.env.DB_HOST || 'mysql',
+        user: process.env.DB_USER || 'userSQU',
+        password: process.env.DB_PASSWORD || '8n0HEUsN8QRpjisv',
+        database: process.env.DB_NAME || 'sampledb',
+    };
+    app.use(cors({
+        origin: 'http://app.capitalai.info'
+    }));
+} else {
+    // Assuming 'dev' or any other value will use this configuration
+    dbConfig = {
+        host: 'localhost',
+        user: 'newuser1',
+        password: 'test123',
+        database: 'budget_tracker',
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0
+    };
+    dbConfigOld = {
+        host: 'localhost',
+        user: 'newuser1',
+        password: 'test123',
+        database: 'budget_tracker',
+    };
+    app.use(cors());
+}
+
+const db = createPool(dbConfig);  // Using createPool from promise version of mysql2
 
 // Using mysql2's createConnection method
 const dbOld = mysql.createConnection(dbConfig);
@@ -514,6 +525,7 @@ async function updateExpense(transactionId,expense, data) {
                       console.error('Error fetching expense name:', err);
                       reject(err);
                   } else {
+                      console.log('Fetching expense name 2: ',results[0]);
                       console.log('Fetching expense name: ',results[0].expense_name);
                       const expenseName = results[0].expense_name;
 
@@ -584,6 +596,8 @@ async function updateExpenseById(matchedExpenseId, data,transactionId) {
 
 app.post('/add-log', async (req, res) => {
   console.log("9/15: Received POST request for smart-add-log...", req.body);
+  const userLang = req.body.userLang;
+  console.log(userLang);
   let advice = '';  // <---- Define the advice variable here, outside of the Promise.race block
   const system_message = `
       Please classify the following expense based on its details:
@@ -599,7 +613,7 @@ app.post('/add-log', async (req, res) => {
           console.log("11/15: Expense not found. Trying matched expense logic...");
 
           const result = await Promise.race([
-            getMatchedExpenseLogic(req.body.user_id, req.body.expenseMonth, system_message)
+            getMatchedExpenseLogic(req.body.user_id, req.body.expenseMonth, system_message,userLang)
             .then(response => {
               const { matchedExpenseId, advice: localAdvice } = response;
               advice = localAdvice; // <---- Set the higher-scoped advice variable here
@@ -609,15 +623,16 @@ app.post('/add-log', async (req, res) => {
                     return { status: "resolved", matchedExpenseId,advice};
                 }
             }),
-            new Promise(resolve => setTimeout(() => resolve({ status: "pending" }), 3000)) // 3 seconds timeout
+            new Promise(resolve => setTimeout(() => resolve({ status: "pending" }), 8000)) // 8 seconds timeout
         ]);
         
 
           console.log("Promise Status:", result.status);
+          console.log("Promise result.matchedExpenseId:", result.matchedExpenseId);
           console.log("Promise result.matchedExpenseId:", result.matchedExpenseId.matchedExpenseId);
 
           if (result.status === "resolved") {
-            const matchedExpenseId = result.matchedExpenseId.matchedExpenseId;
+            const matchedExpenseId = result.matchedExpenseId;
             if (matchedExpenseId && matchedExpenseId !== '0') {
                 console.log("Promise Status: Matched expense found. Going to update it...");
                 await updateExpenseById(matchedExpenseId, req.body, transactionId);
@@ -1492,88 +1507,77 @@ app.post("/getClassifications", async (req, res) => {
     }
   }
 });
-
-async function getMatchedExpenseLogic(userId, expenseMonth, systemMessage) {
+async function getMatchedExpenseLogic(userId, expenseMonth, systemMessage,userLang) {
   console.log("OPEN AI 1/10: getMatchedExpenseLogic STARTED");
-  
+
   return new Promise((resolve, reject) => {
       console.log("OPEN AI 2/10: Inside the promise for /getmatchedexpense", userId, expenseMonth, systemMessage);
 
+      // Validate required parameters
       if (!userId || !expenseMonth || !systemMessage) {
           console.log("OPEN AI 3/10: Required fields missing");
-          return reject({ message: 'User ID, expenseMonth, and systemMessage are required.' });
+          return reject(new Error('User ID, expenseMonth, and systemMessage are required.'));
       }
 
       const fetchQuery = "SELECT id,expense_name FROM expenses WHERE user_id = ? AND expense_month like ?";
       dbOld.query(fetchQuery, [userId, expenseMonth], async (err, expenses) => {
           if (err) {
               console.error("OPEN AI 4/10: Error fetching expenses:", err);
-              return reject({ message: err.message });
+              return reject(new Error(err.message));
           }
 
           console.log("OPEN AI 5/10: Successfully fetched expenses");
 
-          const system_message = `
-Based on the content of the user's query, classify it into one of the following categories by providing the category's ID, if not found, reply 0 or not found:
-${expenses.map(expense => `${expense.id}: ${expense.expense_name}, at the end, make a 1 sentence maximum on what you think about this transaction from a financial advisor standpoint. `).join('\n')}
-          `;
+          const expenseList = expenses.map(expense => `${expense.id}: ${expense.expense_name}`).join(', ');
+          const idList = expenses.map(expense => expense.id);
+          const csvContent = "ID,Expense Name\n" +
+          expenses.map(expense => `${expense.id},${expense.expense_name},${expense.amount}`).join('\n');
+          console.log("OPEN AI 5/10: Successfully fetched list: ");
+          console.log(csvContent);
 
           try {
               console.log("OPEN AI 6/10: Requesting OpenAI's completion");
-              // const completion = await openai.completions.create({
-              //     model: "text-davinci-003",
-              //     prompt: system_message + "\nUser Query: " + systemMessage,
-              //     max_tokens: 100
-              // });
-
               const completion = await openai.chat.completions.create({
-                messages: [
-                  { "role": "system", "content": `Based on the content of the user's query, classify it into one of the following categories by providing the category's ID, if not found, reply 0 or not found:
-                  , at the end, make a 1 sentence maximum 7 words on what you think about this transaction from a financial advisor standpoint.` },
-                  { "role": "user", "content": system_message + "\nUser Query: " + systemMessage }
-                ],
-                model: "gpt-3.5-turbo",
-                max_tokens: 1000
+                  messages: [
+                      {
+                          "role": "system",
+                          "content": `Using your expertise in personal finance, classify the query based on the provided ${csvContent}. Then, offer relevant financial advice in the format: {id}. {Advice}. Ensure your response aligns with the language code ${userLang}, using the provided idList for category identification.`
+                        },
+                      { "role": "user", "content": systemMessage }
+                  ],
+                  model: "gpt-3.5-turbo",
+                  max_tokens: 100
               });
 
-
               console.log("OPEN AI 7/10: OpenAI completion received");
-              console.log(completion.choices[0].message.content);
-              let content = "console.log(completion.choices[0].message.content);"; // Example content
+              const responseContent = completion.choices[0].message.content;
 
-              // Splitting the content based on periods, exclamations, and questions to consider different types of sentence end markers.
-              let sentences = content.split(/(?<=[.!?])\s*/);
-
-              // Getting the last non-empty sentence
-              let advice = sentences.reverse().find(sentence => sentence.trim() !== "") || "";
-
-              console.log(advice);
-
-
-              const responseText = completion.choices[0].message.content.trim();
               const regex = /(\d+)/;
-              const matches = responseText.match(regex);
+              const matches = responseContent.match(regex);
+              const extractedExpenseId = matches ? parseInt(matches[1], 10) : 0;
+              console.log(`OPEN AI 8/10: Extracted matched expense ID: ${extractedExpenseId}`);
 
-              let extractedInteger = matches ? parseInt(matches[1], 10) : 0;
+              let sentences = responseContent.split(/(?<=[.!?])\s*/);
+              const advice = sentences.reverse().find(sentence => sentence.trim() !== "") || "";
 
-              console.log(`OPEN AI 8/10: Extracted matched expense ID: ${extractedInteger}`);
+              console.log("OPEN AI 8/10: OpenAI advice received", advice);
 
-              // Start the database save in parallel.
-              saveToDatabase(userId, systemMessage, responseText, completion)
+              // Save data to database asynchronously.
+              saveToDatabase(userId, systemMessage, responseContent, completion)
                   .catch(err => console.error("Failed to save to database:", err));
-  
-                resolve({
-                    matchedExpenseId: extractedInteger,
-                    advice: advice
-                });
-              
+
+              resolve({
+                  matchedExpenseId: extractedExpenseId,
+                  advice: advice
+              });
           } catch (error) {
               console.error("Error generating completion:", error);
-              return reject({ message: "Error generating completion." });
+              return reject(new Error("Error generating completion."));
           }
       });
   });
 }
+
 async function saveToDatabase(userId, systemMessage, responseText, completion) {
   console.log("OPEN AI Query DB 1/3: Successfully received query-response");
   const saveQuery = `
