@@ -111,6 +111,7 @@ app.post('/add-expense', (req, res) => {
       console.error('Error adding expense:', err);
       res.json({ success: false, error: err.message });
     } else {
+      console.error('added expense:', expenseName);
       res.json({ success: true, expenseId: result.insertId });
     }
   });
@@ -597,10 +598,12 @@ async function updateExpenseById(matchedExpenseId, data,transactionId) {
 app.post('/add-log', async (req, res) => {
   console.log("9/15: Received POST request for smart-add-log...", req.body);
   const userLang = req.body.userLang;
+  const monthlyIncome = req.body.monthlyIncome;
+
   console.log(userLang);
   let advice = '';  // <---- Define the advice variable here, outside of the Promise.race block
   const system_message = `
-      Please classify the following expense based on its details:
+      
       User Query: ${req.body.expenseName}
               `;
   try {
@@ -613,7 +616,7 @@ app.post('/add-log', async (req, res) => {
           console.log("11/15: Expense not found. Trying matched expense logic...");
 
           const result = await Promise.race([
-            getMatchedExpenseLogic(req.body.user_id, req.body.expenseMonth, system_message,userLang)
+            getMatchedExpenseLogic(req.body.user_id, req.body.expenseMonth, system_message,userLang,monthlyIncome)
             .then(response => {
               const { matchedExpenseId, advice: localAdvice } = response;
               advice = localAdvice; // <---- Set the higher-scoped advice variable here
@@ -1507,7 +1510,8 @@ app.post("/getClassifications", async (req, res) => {
     }
   }
 });
-async function getMatchedExpenseLogic(userId, expenseMonth, systemMessage,userLang) {
+async function getMatchedExpenseLogic(userId, expenseMonth, systemMessage,userLang,monthlyIncome) {
+
   console.log("OPEN AI 1/10: getMatchedExpenseLogic STARTED");
 
   return new Promise((resolve, reject) => {
@@ -1534,6 +1538,11 @@ async function getMatchedExpenseLogic(userId, expenseMonth, systemMessage,userLa
           expenses.map(expense => `${expense.id},${expense.expense_name},${expense.amount}`).join('\n');
           console.log("OPEN AI 5/10: Successfully fetched list: ");
           console.log(csvContent);
+          console.log("OPEN AI 5/10: Successfully fetched monthly income: ", monthlyIncome);
+          const system_message = `
+          Based on the content of the user's query, classify it into one of the following categories by providing the category's ID, if not found, reply 0 or not found:
+          ${expenses.map(expense => `${expense.id}: ${expense.expense_name}, at the end put a . and make a 1 sentence maximum on what you think about this transaction from a financial advisor standpoint, my budget is ${monthlyIncome}. Reply me in ${userLang}`).join('\n')}
+                    `;
 
           try {
               console.log("OPEN AI 6/10: Requesting OpenAI's completion");
@@ -1541,12 +1550,12 @@ async function getMatchedExpenseLogic(userId, expenseMonth, systemMessage,userLa
                   messages: [
                       {
                           "role": "system",
-                          "content": `Using your expertise in personal finance, classify the query based on the provided ${csvContent}. Then, offer relevant financial advice in the format: {id}. {Advice}. Ensure your response aligns with the language code ${userLang}, using the provided idList for category identification.`
+                          "content": system_message
                         },
                       { "role": "user", "content": systemMessage }
                   ],
                   model: "gpt-3.5-turbo",
-                  max_tokens: 100
+                  max_tokens: 1000
               });
 
               console.log("OPEN AI 7/10: OpenAI completion received");
@@ -1946,64 +1955,75 @@ app.post('/api/register', async (req, res) => {
   let connection;
 
   try {
-    connection = await db.getConnection();
+      connection = await db.getConnection();
 
-    await connection.beginTransaction();
+      await connection.beginTransaction();
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const userId = uuid.v4();  // generate a unique alphanumeric ID for the user
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const userId = uuid.v4();  // generate a unique alphanumeric ID for the user
 
-    // User insertion
-    const userQuery = 'INSERT INTO users (id, username, email, password) VALUES (?, ?, ?, ?)';
-    await connection.query(userQuery, [userId, username, email, hashedPassword]);
+      // User insertion
+      const userQuery = 'INSERT INTO users (id, username, email, password) VALUES (?, ?, ?, ?)';
+      await connection.query(userQuery, [userId, username, email, hashedPassword]);
 
-    // Default Preferences
-    const preferencesQuery = 'INSERT INTO user_preferences (user_id, language, locale, currency, dateFormat, moneyFormat,ai_coach) VALUES (?, ?, ?, ?, ?, ?, ?)';
-    await connection.query(preferencesQuery, [userId, 'en', 'en-US', 'CNY', 'MM-DD-YYYY', '1,234.56','coach1']);
+      // Default Preferences
+      const preferencesQuery = 'INSERT INTO user_preferences (user_id, language, locale, currency, dateFormat, moneyFormat,ai_coach) VALUES (?, ?, ?, ?, ?, ?, ?)';
+      await connection.query(preferencesQuery, [userId, 'en', 'en-US', 'CNY', 'MM-DD-YYYY', '1,234.56','coach1']);
 
-    // Budget statuses
-    const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth();
+      // Budget statuses
+      const currentDate = new Date();
+      const currentYear = currentDate.getFullYear();
+      const currentMonth = currentDate.getMonth();
 
-    for (let i = 0; i < 36; i++) {
-      const year = currentYear + Math.floor((currentMonth + i) / 12);
-      const month = (currentMonth + i) % 12 + 1;  
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-01`;
+      for (let i = 0; i < 36; i++) {
+          const year = currentYear + Math.floor((currentMonth + i) / 12);
+          const month = (currentMonth + i) % 12 + 1;  
+          const dateStr = `${year}-${String(month).padStart(2, '0')}-01`;
 
-      let status = 'expected';
-      if (i === 0) {
-        status = 'waiting';
-      } else if (i < 0) {
-        status = 'closed';
+          let status = 'expected';
+          if (i === 0) {
+              status = 'waiting';
+          } else if (i < 0) {
+              status = 'closed';
+          }
+
+          const budgetStatusQuery = `INSERT INTO budget_status (\`user_id\`, \`year_month\`, \`status\`) VALUES (?, ?, ?)`;
+          await connection.query(budgetStatusQuery, [userId, dateStr, status]);
       }
 
-      const budgetStatusQuery = `INSERT INTO budget_status (\`user_id\`, \`year_month\`, \`status\`) VALUES (?, ?, ?)`;
-      await connection.query(budgetStatusQuery, [userId, dateStr, status]);
-    }
+      await connection.commit();
 
-    await connection.commit();
-    res.json({ success: true, message: 'User registered successfully' });
+      // Generate a JWT token after successful registration
+      const token = jwt.sign(
+          { id: userId, username: username, email: email },
+          SECRET_KEY,
+          { expiresIn: '960h' }
+      );
+
+      // Return the token along with success message
+      res.json({
+          success: true, 
+          message: 'User registered successfully', 
+          token: token
+      });
 
   } catch (error) {
-    if (connection) await connection.rollback();
-    console.error('Server error:', error);
-    
-    if (error.code === 'ER_DUP_ENTRY') {
-      if (error.sqlMessage.includes('unique_username')) {
-          res.json({ success: false, error: 'Username already exists. Please choose another one.' });
-      } else if (error.sqlMessage.includes('unique_email')) {
-          res.json({ success: false, error: 'Email already exists. Please use a different email.' });
-      } else {
-          res.json({ success: false, error: 'A unique constraint was violated. Please try again.' });
-      }
-  } else {
-      res.json({ success: false, error: 'Server error' });
-  }
-  
+      if (connection) await connection.rollback();
+      console.error('Server error:', error);
 
+      if (error.code === 'ER_DUP_ENTRY') {
+          if (error.sqlMessage.includes('unique_username')) {
+              res.json({ success: false, error: 'Username already exists. Please choose another one.' });
+          } else if (error.sqlMessage.includes('unique_email')) {
+              res.json({ success: false, error: 'Email already exists. Please use a different email.' });
+          } else {
+              res.json({ success: false, error: 'A unique constraint was violated. Please try again.' });
+          }
+      } else {
+          res.json({ success: false, error: 'Server error' });
+      }
   } finally {
-    if (connection) connection.release();
+      if (connection) connection.release();
   }
 });
 
