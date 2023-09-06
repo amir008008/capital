@@ -1764,6 +1764,38 @@ app.get('/get-expenses-for-logging', (req, res) => {
 
 
 
+// app.get('/get-expenses', (req, res) => {
+//   const { user_id, category, month } = req.query;
+
+//   // Trim the month value to remove whitespace and newline characters
+//   const trimmedMonth = month.trim();
+
+//   let query;
+//   let queryParams;
+
+//   if (category) {
+//     query = 'SELECT * FROM expenses WHERE user_id = ? AND category_id = ? AND DATE_FORMAT(expense_month, "%Y-%m") LIKE ?';
+//     queryParams = [user_id, category, `${trimmedMonth}%`];
+//   } else {
+//     query = 'SELECT * FROM expenses WHERE user_id = ? AND DATE_FORMAT(expense_month, "%Y-%m") LIKE ?';
+//     queryParams = [user_id, `${trimmedMonth}%`];
+//   }
+
+//   // Log the query and query parameters
+//   //console.log('Query:', query);
+//   //console.log('Query Params:', queryParams);
+
+//   // Perform the query
+//   dbOld.query(query, queryParams, (err, result) => {
+//     if (err) {
+//       console.error('Error fetching expenses:', err);
+//       res.json({ success: false, error: err.message });
+//     } else {
+//       res.json({ success: true, expenses: result });
+//     }
+//   });
+// });
+
 app.get('/get-expenses', (req, res) => {
   const { user_id, category, month } = req.query;
 
@@ -1773,12 +1805,27 @@ app.get('/get-expenses', (req, res) => {
   let query;
   let queryParams;
 
+  const baseSelect = `
+    SELECT e.*, COALESCE(SUM(t.transaction_amount), 0) AS total_amount 
+    FROM expenses e
+    LEFT JOIN transactions t ON e.expense_name = t.matched_expense_name 
+                              AND t.status = 'alive' 
+                              AND e.user_id = t.user_id
+                              AND DATE_FORMAT(t.transaction_date, "%Y-%m") LIKE ?
+  `;
+
+  const groupBy = `GROUP BY e.id`;
+
   if (category) {
-    query = 'SELECT * FROM expenses WHERE user_id = ? AND category_id = ? AND DATE_FORMAT(expense_month, "%Y-%m") LIKE ?';
-    queryParams = [user_id, category, `${trimmedMonth}%`];
+    query = `${baseSelect}
+             WHERE e.user_id = ? AND e.category_id = ? AND DATE_FORMAT(e.expense_month, "%Y-%m") LIKE ?
+             ${groupBy}`;
+    queryParams = [`${trimmedMonth}%`, user_id, category, `${trimmedMonth}%`];
   } else {
-    query = 'SELECT * FROM expenses WHERE user_id = ? AND DATE_FORMAT(expense_month, "%Y-%m") LIKE ?';
-    queryParams = [user_id, `${trimmedMonth}%`];
+    query = `${baseSelect}
+             WHERE e.user_id = ? AND DATE_FORMAT(e.expense_month, "%Y-%m") LIKE ?
+             ${groupBy}`;
+    queryParams = [`${trimmedMonth}%`, user_id, `${trimmedMonth}%`];
   }
 
   // Log the query and query parameters
@@ -1795,6 +1842,7 @@ app.get('/get-expenses', (req, res) => {
     }
   });
 });
+
 
 // Endpoint to fetch user preferences
 app.get('/preferences/:userId', (req, res) => {
