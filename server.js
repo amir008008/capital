@@ -105,8 +105,8 @@ app.get('/', (req, res) => {
 app.post('/add-expense', (req, res) => {
   const { user_id, category, expenseName, expenseAmount, expenseType, expenseMonth } = req.body;
 
-  const query = 'INSERT INTO expenses (user_id, category_id, expense_name, expense_amount, expense_type, expense_month) VALUES (?, ?, ?, ?, ?, ?)';
-  dbOld.query(query, [user_id, category, expenseName, expenseAmount, expenseType, expenseMonth], (err, result) => {
+  const query = 'INSERT INTO expenses (user_id, category_id, expense_name, expense_amount, expense_type, expense_month,used_already) VALUES (?, ?, ?, ?, ?, ?, ?)';
+  dbOld.query(query, [user_id, category, expenseName, expenseAmount, expenseType, expenseMonth,'0'], (err, result) => {
     if (err) {
       console.error('Error adding expense:', err);
       res.json({ success: false, error: err.message });
